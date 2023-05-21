@@ -62,28 +62,29 @@ fn build_cool_scene() -> Scene {
     let rot = UnitQuaternion::from_scaled_axis(Vector3::y() * PI);
 
     // big sphere
-    let tran = Translation3::new(0.0, VIEWPORT_WIDTH * -100.5, -5.0 * VIEWPORT_WIDTH);
+    let tran = Translation3::new(0.0, VIEWPORT_WIDTH * -100.5 - 2.5, -5.0 * VIEWPORT_WIDTH);
     let big_sphere_radius = VIEWPORT_WIDTH * 100.0;
-    let col = Vector3::new(0.05, 0.35, 0.075);
+    let floor_col = Vector3::new(0.05, 0.35, 0.075);
     scene.add(
         Ball::new(big_sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::diffuse(col),
+        Texture::diffuse(floor_col),
     );
 
     // center sphere
-    let tran = Translation3::new(0.0, 0.0, -5.0 * VIEWPORT_WIDTH);
+    let center_h = 2.25;
+    let tran = Translation3::new(0.0, center_h, -5.0 * VIEWPORT_WIDTH);
     let center_sphere_radius = VIEWPORT_WIDTH;
-    let black = Vector3::new(0.0, 0.0, 0.0);
+    let blue = Vector3::new(0.0, 0.0, 0.5);
     scene.add(
         Ball::new(center_sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::metal(black, 0.5).with_fuzz(0.3),
+        Texture::metal(blue, 0.5).with_fuzz(0.125),
     );
 
     // moon
     let moon_d = VIEWPORT_WIDTH * 500.0;
-    let tran = Translation3::new(moon_d, moon_d, -2.0*moon_d);
+    let tran = Translation3::new(moon_d, moon_d, -2.0 * moon_d);
     let moon_radius = VIEWPORT_WIDTH * 100.0;
     let moon_col = Vector3::new(10.0, 10.0, 0.5);
     scene.add(
@@ -93,33 +94,37 @@ fn build_cool_scene() -> Scene {
     );
 
     // hovering die
-    let tran = Translation3::new(0.0, 2.5 * center_sphere_radius, -5.0 * VIEWPORT_WIDTH);
-    let die_rot = UnitQuaternion::from_scaled_axis(Vector3::x() * FRAC_PI_4)
-        * UnitQuaternion::from_scaled_axis(Vector3::z() * FRAC_PI_4);
-    let red = Vector3::new(0.25, 0.0, 0.0);
-    let side_len = center_sphere_radius * 0.625;
+    let tran = Translation3::new(
+        0.0,
+        center_h + 1.75 * center_sphere_radius,
+        -5.0 * VIEWPORT_WIDTH,
+    );
+    let die_rot = UnitQuaternion::from_scaled_axis(Vector3::x() * PI)
+        * UnitQuaternion::from_scaled_axis(Vector3::z() * FRAC_PI_4)
+        * UnitQuaternion::from_scaled_axis(Vector3::y() * FRAC_PI_2)
+        ;
+    let red = Vector3::new(0.45, 0.0, 0.0);
+    let side_len = center_sphere_radius * 0.3819;
     let die = Cuboid::new(Vector3::new(side_len, side_len, side_len));
     scene.add(
         die,
         Isometry3::from_parts(tran, die_rot),
-        Texture::metal(red, 0.8),
+        Texture::metal(red, 0.35),
     );
 
     let smaller = VIEWPORT_WIDTH / 4.0;
     for ring_level in 0..4 {
         let r = center_sphere_radius + 1.0 + 1.25 * ring_level as f32;
-        let y = 0.0 - ring_level as f32 * 0.5;
+        let y = center_h - 1.5 - ring_level as f32;
         for alpha in 0..8 {
-            let alpha = std::f32::consts::FRAC_PI_4 * alpha as f32;
+            let alpha = std::f32::consts::FRAC_PI_4 * (alpha as f32 + 0.5);
             let x = r * alpha.cos();
             let z = r * alpha.sin() - 5.0 * VIEWPORT_WIDTH;
-            // println!("alpha: {}, r: {}, x: {}, y: {}, z: {}", alpha, r, x, y, z);
             let tran = Translation3::new(x, y, z);
             scene.add(
                 Ball::new(smaller),
                 Isometry3::from_parts(tran, rot),
                 Texture::dark_mirror(0.5),
-                // Texture::perfect_mirror(),
             );
         }
     }
