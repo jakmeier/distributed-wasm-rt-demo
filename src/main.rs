@@ -64,11 +64,11 @@ fn build_cool_scene() -> Scene {
     // big sphere
     let tran = Translation3::new(0.0, VIEWPORT_WIDTH * -100.5 - 2.5, -5.0 * VIEWPORT_WIDTH);
     let big_sphere_radius = VIEWPORT_WIDTH * 100.0;
-    let floor_col = Vector3::new(0.05, 0.55, 0.075);
+    let floor_col = Vector3::new(0.05, 0.8, 0.075);
     scene.add(
         Ball::new(big_sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::diffuse(floor_col),
+        Texture::diffuse(floor_col, 0.5).with_fuzz(0.125),
     );
 
     // center sphere
@@ -79,7 +79,7 @@ fn build_cool_scene() -> Scene {
     scene.add(
         Ball::new(center_sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::metal(blue, 0.5).with_fuzz(0.125),
+        Texture::metal(blue, 0.6, 0.2).with_fuzz(0.125),
     );
 
     // moon (sun)
@@ -90,7 +90,7 @@ fn build_cool_scene() -> Scene {
     scene.add(
         Ball::new(moon_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::diffuse(moon_col),
+        Texture::perfect_diffuse(moon_col),
     );
 
     // hovering die
@@ -109,7 +109,7 @@ fn build_cool_scene() -> Scene {
     scene.add(
         die,
         Isometry3::from_parts(tran, die_rot),
-        Texture::metal(red, 0.65),
+        Texture::metal(red, 0.65, 0.25),
     );
 
     let smaller = VIEWPORT_WIDTH / 4.0;
@@ -145,7 +145,7 @@ fn build_simple_scene() -> Scene {
     scene.add(
         Ball::new(sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::diffuse(col),
+        Texture::diffuse(col, 0.5),
     );
 
     // small sphere
@@ -155,7 +155,7 @@ fn build_simple_scene() -> Scene {
     scene.add(
         Ball::new(sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::diffuse(col),
+        Texture::diffuse(col, 0.5),
     );
 
     scene

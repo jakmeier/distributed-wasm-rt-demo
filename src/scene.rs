@@ -83,7 +83,7 @@ impl Scene {
                 }
                 ReflectionType::Absorb => Vector3::new(0.0, 0.0, 0.0),
             };
-            return texture.color_strength() * texture.color()
+            return texture.color_strength() * texture.color() * light_in.norm()
                 + texture.reflective_strength() * light_in;
         }
         background_color(ray)
@@ -94,8 +94,8 @@ impl Scene {
 fn background_color(ray: &Ray<f32>) -> Vector3<f32> {
     let direction: Vector3<f32> = ray.dir.into();
     let unit_direction = direction.normalize();
-    let dark = Vector3::new(-0.2, -0.2, -0.1);
-    let light = Vector3::new(0.3, 0.3, 1.2);
+    let dark = Vector3::new(-0.3, -0.3, 0.3);
+    let light = Vector3::new(0.5, 0.5, 1.55);
     // let black = Vector3::new(0.0, 0.0, 0.0005);
     // let t = 0.25 * (3.0*unit_direction.y + 1.0);
     let t = 0.35 - unit_direction.y;
