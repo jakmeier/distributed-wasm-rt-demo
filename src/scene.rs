@@ -90,16 +90,17 @@ impl Scene {
     }
 }
 
+/// (Sky)
 fn background_color(ray: &Ray<f32>) -> Vector3<f32> {
     let direction: Vector3<f32> = ray.dir.into();
     let unit_direction = direction.normalize();
-    let blue = Vector3::new(0.0, 0.0, 0.1);
-    // let white = Vector3::new(1.0, 1.0, 1.0);
-    let black = Vector3::new(0.0, 0.0, 0.0005);
+    let dark = Vector3::new(-0.2, -0.2, -0.1);
+    let light = Vector3::new(0.3, 0.3, 1.2);
+    // let black = Vector3::new(0.0, 0.0, 0.0005);
     // let t = 0.25 * (3.0*unit_direction.y + 1.0);
     let t = 0.35 - unit_direction.y;
     let t = t.max(0.0).min(1.0);
-    let col = (1.0 - t) * black + t * blue;
+    let col = (1.0 - t) * light + t * dark;
     let shadow = 1.0;
     col * shadow
 }

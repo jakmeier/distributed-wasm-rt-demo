@@ -19,7 +19,7 @@ impl Texture {
         }
     }
     pub fn diffuse(color: Vector3<f32>) -> Self {
-        Self::new(color, ReflectionType::Lambert, 0.5)
+        Self::new(color, ReflectionType::Lambert, 0.75)
     }
     pub fn perfect_mirror() -> Self {
         Self::dark_mirror(0.0)
