@@ -13,15 +13,11 @@ pub struct Scene {
     collision_group: CollisionGroups,
     query_type: GeometricQueryType<f32>,
     world: CollisionWorld<f32, Texture>,
+    background_color: fn(&Ray<f32>) -> Vector3<f32>,
 }
 
-// pub struct ObjectData {
-//     color: Vector3<f32>,
-//     reflection: ReflectionType,
-// }
-
 impl Scene {
-    pub fn new(max_distance: f32) -> Self {
+    pub fn new(max_distance: f32, background_color: fn(&Ray<f32>) -> Vector3<f32>) -> Self {
         let margin = 0.0002;
         // these values should only matter for collision between objects - not for mere ray casting
         //  Contact points will be generated as long as the two objects are penetrating or closer than the sum of both prediction values.
@@ -35,6 +31,7 @@ impl Scene {
             collision_group: CollisionGroups::new(),
             max_distance,
             query_type,
+            background_color,
         }
     }
     pub fn add(&mut self, obj: impl Shape<f32>, position: Isometry3<f32>, texture: Texture) {
@@ -86,21 +83,6 @@ impl Scene {
             return texture.color_strength() * texture.color() * light_in.norm()
                 + texture.reflective_strength() * light_in;
         }
-        background_color(ray)
+        (self.background_color)(ray)
     }
-}
-
-/// (Sky)
-fn background_color(ray: &Ray<f32>) -> Vector3<f32> {
-    let direction: Vector3<f32> = ray.dir.into();
-    let unit_direction = direction.normalize();
-    let dark = Vector3::new(-0.3, -0.3, 0.3);
-    let light = Vector3::new(0.5, 0.5, 1.55);
-    // let black = Vector3::new(0.0, 0.0, 0.0005);
-    // let t = 0.25 * (3.0*unit_direction.y + 1.0);
-    let t = 0.35 - unit_direction.y;
-    let t = t.max(0.0).min(1.0);
-    let col = (1.0 - t) * light + t * dark;
-    let shadow = 1.0;
-    col * shadow
 }

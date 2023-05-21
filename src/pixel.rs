@@ -15,11 +15,6 @@ impl Pixel {
             col: Vector3::new(to_u8(r), to_u8(g), to_u8(b)),
         }
     }
-    // pub fn rgb_i(r: u8, g: u8, b: u8) -> Self {
-    //     Self {
-    //         col: Vector3::new(r, g, b),
-    //     }
-    // }
 }
 
 pub struct PixelPlane {
@@ -34,20 +29,6 @@ pub struct PixelPlaneShard {
     pub h: usize,
     pixels: Vec<Pixel>,
 }
-// pub struct PixelPlaneShard<'a> {
-//     pub x: usize,
-//     pub y: usize,
-//     pub w: usize,
-//     pub h: usize,
-//     pixels: &'a mut [Pixel],
-// }
-// pub struct PackedPixelPlaneShard {
-//     pub x: usize,
-//     pub y: usize,
-//     pub w: usize,
-//     pub h: usize,
-//     pixels: *const Pixel,
-// }
 
 impl PixelPlane {
     pub fn new(w: usize, h: usize) -> Self {
@@ -125,31 +106,3 @@ impl Default for Pixel {
         }
     }
 }
-
-// // Bad and unsafe
-// impl<'a> Into<PackedPixelPlaneShard> for PixelPlaneShard<'a> {
-//     fn into(self) -> PackedPixelPlaneShard {
-//         // let pixels = std::slice::from_raw_parts_mut(pointer, pixels.len());
-//         PackedPixelPlaneShard {
-//             x: self.x,
-//             y: self.y,
-//             w: self.w,
-//             h: self.h,
-//             pixels: self.pixels.first_mut().unwrap() as *mut Pixel,
-//         }
-//     }
-// }
-// impl Into<PixelPlaneShard<'static>> for PackedPixelPlaneShard {
-//     fn into(self) -> PixelPlaneShard<'static> {
-//         PixelPlaneShard {
-//             x: self.x,
-//             y: self.y,
-//             w: self.w,
-//             h: self.h,
-//             pixels: std::slice::from_raw_parts_mut(
-//                 std::mem::transmute(self.pixels),
-//                 self.w * self.h,
-//             ),
-//         }
-//     }
-// }
