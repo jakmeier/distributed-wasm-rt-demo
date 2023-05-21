@@ -106,3 +106,25 @@ impl Default for Pixel {
         }
     }
 }
+
+impl From<&mut PixelPlane> for PixelPlaneShard {
+    fn from(total: &mut PixelPlane) -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            w: total.w,
+            h: total.h,
+            pixels: total.pixels.clone(),
+        }
+    }
+}
+
+impl From<PixelPlaneShard> for PixelPlane {
+    fn from(shard: PixelPlaneShard) -> Self {
+        Self {
+            w: shard.w,
+            h: shard.h,
+            pixels: shard.pixels.clone(),
+        }
+    }
+}

@@ -9,7 +9,7 @@ use crate::*;
 
 pub fn build_cool_scene() -> Scene {
     const MAX_DISTANCE: f32 = 1_000_000.0;
-    let mut scene = Scene::new(MAX_DISTANCE, sky);
+    let mut scene = SceneBuilder::new(MAX_DISTANCE, sky);
 
     let rot = UnitQuaternion::from_scaled_axis(Vector3::y() * PI);
 
@@ -80,12 +80,12 @@ pub fn build_cool_scene() -> Scene {
         }
     }
 
-    scene
+    scene.build()
 }
 
 pub fn build_simple_scene() -> Scene {
     const MAX_DISTANCE: f32 = 100.0;
-    let mut scene = Scene::new(MAX_DISTANCE, simple_background);
+    let mut scene = SceneBuilder::new(MAX_DISTANCE, simple_background);
 
     let rot = UnitQuaternion::from_scaled_axis(Vector3::y() * PI);
 
@@ -109,17 +109,18 @@ pub fn build_simple_scene() -> Scene {
         Texture::metal(col, 0.05, 0.9).with_fuzz(0.5),
     );
 
-    scene
+    scene.build()
 }
 
 fn sky(ray: &Ray<f32>) -> Vector3<f32> {
+    // todo: use sun as main source of light
     let direction: Vector3<f32> = ray.dir.into();
     let unit_direction = direction.normalize();
     let dark = Vector3::new(-0.3, -0.3, 0.3);
     let light = Vector3::new(0.5, 0.5, 1.55);
     let t = 0.35 - unit_direction.y;
     let t = t.max(0.0).min(1.0);
-    let col = (1.0 - t) * light + t * dark;
+    let col = 0.5 * (1.0 - t) * light + t * dark;
     col
 }
 

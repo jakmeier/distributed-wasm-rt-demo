@@ -67,8 +67,8 @@ impl Texture {
 
 fn random_fuzz(max: f32) -> Vector3<f32> {
     let mut rng = rand::thread_rng();
-    let x: f32 = rng.gen_range(-max, max);
-    let y: f32 = rng.gen_range(-max, max);
-    let z: f32 = rng.gen_range(-max, max);
+    let x = rng.gen::<f32>() * 2.0 * max - max;
+    let y = rng.gen::<f32>() * 2.0 * max - max;
+    let z = rng.gen::<f32>() * 2.0 * max - max;
     Vector3::new(x, y, z)
 }

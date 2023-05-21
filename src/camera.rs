@@ -41,6 +41,12 @@ impl Camera {
 
     pub fn render(&self, scene: Scene, buffer: &mut PixelPlane, n_threads: usize) {
         let (w, h) = (buffer.w, buffer.h);
+        if n_threads == 1 {
+            let mut shard = buffer.into();
+            self.render_shard(&scene, w, h, &mut shard);
+            *buffer = shard.into();
+            return;
+        }
         let shards = buffer.split_into_shards(n_threads);
         let mut handles = vec![];
         let scene = Arc::new(scene);

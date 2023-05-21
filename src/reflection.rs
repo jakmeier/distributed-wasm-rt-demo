@@ -22,8 +22,8 @@ pub fn mirror_reflection(
 /// Note that the incoming angle is ignored, only the surface normal matters.
 pub fn lambertian_reflection(point: &Point3<f32>, normal: &Vector3<f32>) -> Ray<f32> {
     let mut rng = rand::thread_rng();
-    let a: f32 = rng.gen_range(0.0, PI * 2.0);
-    let z: f32 = rng.gen_range(-1.0, 1.0);
+    let a: f32 = rng.gen::<f32>() * PI * 2.0;
+    let z: f32 = rng.gen::<f32>() * 2.0 - 1.0;
     let r = (1.0 - z * z).sqrt();
     let out_direction = normal + Vector3::new(r * a.cos(), r * a.cos(), z);
     Ray::new(*point, out_direction)

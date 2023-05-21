@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::reflection::*;
 use crate::texture::Texture;
 use nalgebra::geometry::*;
@@ -8,7 +10,7 @@ use ncollide3d::shape::*;
 
 const EPSILON: f32 = f32::EPSILON;
 
-pub struct Scene {
+pub struct SceneBuilder {
     max_distance: f32,
     collision_group: CollisionGroups,
     query_type: GeometricQueryType<f32>,
@@ -16,7 +18,15 @@ pub struct Scene {
     background_color: fn(&Ray<f32>) -> Vector3<f32>,
 }
 
-impl Scene {
+#[derive(Clone)]
+pub struct Scene {
+    max_distance: f32,
+    collision_group: CollisionGroups,
+    world: Arc<CollisionWorld<f32, Texture>>,
+    background_color: fn(&Ray<f32>) -> Vector3<f32>,
+}
+
+impl SceneBuilder {
     pub fn new(max_distance: f32, background_color: fn(&Ray<f32>) -> Vector3<f32>) -> Self {
         let margin = 0.0002;
         // these values should only matter for collision between objects - not for mere ray casting
@@ -46,6 +56,18 @@ impl Scene {
         );
         self.world.update();
     }
+
+    pub fn build(self) -> Scene {
+        Scene {
+            max_distance: self.max_distance,
+            collision_group: self.collision_group,
+            world: Arc::new(self.world),
+            background_color: self.background_color,
+        }
+    }
+}
+
+impl Scene {
     pub fn cast_ray(&self, ray: &Ray<f32>, depth: usize) -> Vector3<f32> {
         if depth == 0 {
             return Vector3::new(0.0, 0.0, 0.0);

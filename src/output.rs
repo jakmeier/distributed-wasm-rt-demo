@@ -11,15 +11,18 @@ impl PixelPlane {
         Ok(())
     }
     pub fn export_png(&self, path: &Path) -> std::io::Result<()> {
-        let mut buffer = BufWriter::new(File::create(path)?);
-        let mut encoder = png::Encoder::new(&mut buffer, self.w as u32, self.h as u32);
+        let buffer = BufWriter::new(File::create(path)?);
+        self.write_png(buffer)?;
+        Ok(())
+    }
+    pub fn write_png(&self, out: impl Write) -> Result<(), std::io::Error> {
+        let mut encoder = png::Encoder::new(out, self.w as u32, self.h as u32);
         encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;
-        unsafe {
+        Ok(unsafe {
             writer.write_image_data(&self.raw_data())?;
-        }
-        Ok(())
+        })
     }
     fn write_ppm(&self, out: &mut impl Write) -> std::io::Result<()> {
         writeln!(out, "P3")?;

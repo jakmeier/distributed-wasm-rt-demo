@@ -1,3 +1,5 @@
+//! Simple CPU ray-tracer, based on and inspired by https://github.com/RayTracing/raytracing.github.io
+
 mod camera;
 mod output;
 mod pixel;
