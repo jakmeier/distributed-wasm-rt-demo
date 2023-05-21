@@ -1,14 +1,6 @@
-[package]
-authors = ["jakmeier"]
-edition = "2018"
-name = "clumsy-rt"
-version = "0.1.0"
+[workspace]
 
-[lib]
-
-[dependencies]
-getrandom = {version = "0.2", features = ["js"]}
-nalgebra = "0.30"
-ncollide3d = "0.33"
-png = "0.17.8"
-rand = "0.8.5"
+members = [
+  "clumsy-rt",
+  "web-view",
+]
