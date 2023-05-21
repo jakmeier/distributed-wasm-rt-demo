@@ -37,7 +37,7 @@ impl Scene {
             query_type,
         }
     }
-    pub fn add(&mut self, obj: Ball<f32>, position: Isometry3<f32>, texture: Texture) {
+    pub fn add(&mut self, obj: impl Shape<f32>, position: Isometry3<f32>, texture: Texture) {
         let handle = ShapeHandle::new(obj);
 
         self.world.add(
@@ -66,22 +66,25 @@ impl Scene {
             let texture = obj.data();
             let point_of_impact = ray.origin + collision.toi * ray.dir;
             let normal = collision.normal;
-            let light = match texture.reflection_type {
+            let light_in = match texture.reflection_type {
                 ReflectionType::Lambert => {
-                    let new_ray = lambertian_reflection(&point_of_impact, &normal);
+                    let mut new_ray = lambertian_reflection(&point_of_impact, &normal);
+                    if let Some(fuzz) = texture.fuzz() {
+                        new_ray.dir = new_ray.dir.normalize() + fuzz;
+                    }
                     self.cast_ray(&new_ray, depth - 1)
                 }
-                ReflectionType::Mirror => {
-                    let new_ray = mirror_reflection(&ray.dir, &point_of_impact, &normal);
+                ReflectionType::Metal => {
+                    let mut new_ray = mirror_reflection(&ray.dir, &point_of_impact, &normal);
+                    if let Some(fuzz) = texture.fuzz() {
+                        new_ray.dir = new_ray.dir.normalize() + fuzz;
+                    }
                     self.cast_ray(&new_ray, depth - 1)
                 }
                 ReflectionType::Absorb => Vector3::new(0.0, 0.0, 0.0),
             };
-            // FIXME: I don't think this corresponds reall to the usual equation
-            let reflected = texture.reflective_strength * light;
-            let col = texture.color;
-            let own = texture.color_strength * col * light.norm();
-            return (own + reflected) * texture.absorb;
+            return texture.color_strength() * texture.color()
+                + texture.reflective_strength() * light_in;
         }
         background_color(ray)
     }
@@ -90,10 +93,13 @@ impl Scene {
 fn background_color(ray: &Ray<f32>) -> Vector3<f32> {
     let direction: Vector3<f32> = ray.dir.into();
     let unit_direction = direction.normalize();
-    let blue = Vector3::new(0.5, 0.7, 1.0);
-    let white = Vector3::new(1.0, 1.0, 1.0);
-    let t = 0.5 * (unit_direction.y + 1.0);
-    let col = (1.0 - t) * white + t * blue;
+    let blue = Vector3::new(0.0, 0.0, 0.1);
+    // let white = Vector3::new(1.0, 1.0, 1.0);
+    let black = Vector3::new(0.0, 0.0, 0.0005);
+    // let t = 0.25 * (3.0*unit_direction.y + 1.0);
+    let t = 0.35 - unit_direction.y;
+    let t = t.max(0.0).min(1.0);
+    let col = (1.0 - t) * black + t * blue;
     let shadow = 1.0;
     col * shadow
 }

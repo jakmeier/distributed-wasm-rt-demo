@@ -5,7 +5,7 @@ use std::f32::consts::*;
 
 pub enum ReflectionType {
     Lambert,
-    Mirror,
+    Metal,
     Absorb,
 }
 
