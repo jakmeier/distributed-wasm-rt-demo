@@ -13,7 +13,7 @@ impl PixelPlane {
     pub fn export_png(&self, path: &Path) -> std::io::Result<()> {
         let mut buffer = BufWriter::new(File::create(path)?);
         let mut encoder = png::Encoder::new(&mut buffer, self.w as u32, self.h as u32);
-        encoder.set_color(png::ColorType::RGB);
+        encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;
         unsafe {
