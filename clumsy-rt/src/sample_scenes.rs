@@ -24,9 +24,10 @@ pub fn build_cool_scene() -> Scene {
     );
 
     // center sphere
-    let center_h = 2.0;
-    let tran = Translation3::new(0.0, center_h, -5.0 * VIEWPORT_WIDTH);
     let center_sphere_radius = VIEWPORT_WIDTH;
+    let center_h = 0.5;
+    let y = center_h + 1.75 * center_sphere_radius;
+    let tran = Translation3::new(0.0, y, -5.0 * VIEWPORT_WIDTH);
     let blue = Vector3::new(0.0, 0.0, 0.5);
     scene.add(
         Ball::new(center_sphere_radius),
@@ -45,13 +46,9 @@ pub fn build_cool_scene() -> Scene {
         Texture::perfect_diffuse(moon_col),
     );
 
-    // hovering die
-    let tran = Translation3::new(
-        0.0,
-        center_h + 1.75 * center_sphere_radius,
-        -5.0 * VIEWPORT_WIDTH,
-    );
-    let die_rot = UnitQuaternion::from_scaled_axis(Vector3::x() * PI)
+    // die
+    let tran = Translation3::new(0.0, center_h - 3.0, -5.0 * VIEWPORT_WIDTH);
+    let die_rot = UnitQuaternion::from_scaled_axis(Vector3::x() * FRAC_PI_4)
         * UnitQuaternion::from_scaled_axis(Vector3::z() * FRAC_PI_4)
         * UnitQuaternion::from_scaled_axis(Vector3::y() * FRAC_PI_2);
     let red = Vector3::new(0.85, 0.0, 0.0);
@@ -66,7 +63,7 @@ pub fn build_cool_scene() -> Scene {
     let smaller = VIEWPORT_WIDTH / 4.0;
     for ring_level in 0..4 {
         let r = center_sphere_radius + 1.0 + 1.25 * ring_level as f32;
-        let y = center_h - 1.5 - ring_level as f32 * 1.25;
+        let y = center_h + - ring_level as f32 * 1.25;
         for alpha in 0..8 {
             let alpha = std::f32::consts::FRAC_PI_4 * (alpha as f32 + 0.5);
             let x = r * alpha.cos();
