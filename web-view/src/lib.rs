@@ -1,5 +1,5 @@
 use paddle::*;
-use render::RenderTask;
+use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::{wasm_bindgen, Closure};
 use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, Worker};
@@ -30,14 +30,22 @@ struct Main {
     /// target number of workers
     worker_num: usize,
     job_pool: Vec<RenderTask>,
+    current_quality: u32,
 
+    /// Stack of all images rendered, drawn in the order they were added and
+    /// potentially covering older images.
     imgs: Vec<(ImageDesc, Rectangle)>,
+
+    /// number of jobs currently waiting to be done
+    outstanding_jobs: usize,
+    /// number of images left from the previous job
+    old_images: usize,
 }
 
 impl paddle::Frame for Main {
     type State = ();
-    const WIDTH: u32 = 480;
-    const HEIGHT: u32 = 360;
+    const WIDTH: u32 = SCREEN_W;
+    const HEIGHT: u32 = SCREEN_H;
 
     fn draw(&mut self, _state: &mut Self::State, canvas: &mut DisplayArea, _timestamp: f64) {
         canvas.fit_display(5.0);
@@ -64,6 +72,17 @@ impl paddle::Frame for Main {
             }
         }
     }
+
+    fn key(&mut self, _state: &mut Self::State, key: KeyEvent) {
+        if key.event_type() == KeyEventType::KeyPress {
+            match key.key() {
+                Key::Space => {
+                    self.ping_next_job();
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 struct RawPngPart {
@@ -73,15 +92,39 @@ struct RawPngPart {
 
 impl Main {
     fn init() -> Self {
-        let screen = Rectangle::new_sized((SCREEN_W, SCREEN_H));
-        let job = RenderTask::new(screen);
+        let quality = 0;
+        let job = Self::new_full_screen_job(quality).unwrap();
+        let num_starter_jobs = 64;
 
         Main {
-            // scene: IncrementalSceneRenderer::new(clumsy_rt::sample_scenes::build_cool_scene()),
             workers: vec![],
             worker_num: 10,
-            job_pool: job.divide(64),
+            job_pool: job.divide(num_starter_jobs),
+            current_quality: quality,
             imgs: vec![],
+            old_images: 0,
+            outstanding_jobs: num_starter_jobs as usize,
+        }
+    }
+
+    /// Starts new job if the old isn no longer running
+    fn ping_next_job(&mut self) {
+        if self.outstanding_jobs == 0 {
+            self.current_quality += 1;
+            if self.old_images > 0 {
+                self.imgs.drain(..self.old_images);
+            }
+            let num_new_jobs = match self.current_quality {
+                0..=2 => 64,
+                3..=4 => 256,
+                _ => 512,
+            };
+
+            self.old_images = self.imgs.len();
+            self.outstanding_jobs = num_new_jobs;
+            if let Some(job) = Self::new_full_screen_job(self.current_quality) {
+                self.job_pool = job.divide(num_new_jobs as u32);
+            }
         }
     }
 
@@ -96,7 +139,8 @@ impl Main {
             .current_job
             .take()
             .expect("response without job?");
-        self.imgs.push((img_desc, job.area));
+        self.imgs.push((img_desc, job.screen_area));
+        self.outstanding_jobs -= 1;
     }
 
     /// paddle event listener
@@ -135,6 +179,46 @@ impl Main {
             current_job: None,
             ready: false,
         }
+    }
+
+    fn new_full_screen_job(quality: u32) -> Option<RenderTask> {
+        let screen = Rectangle::new_sized((SCREEN_W, SCREEN_H));
+        let mut settings = RenderSettings {
+            resolution: (screen.width() as u32, screen.height() as u32),
+            samples: 512,
+            recursion: 200,
+        };
+        match quality {
+            0 => {
+                settings.resolution.0 = settings.resolution.0 / 4;
+                settings.resolution.1 = settings.resolution.1 / 4;
+                settings.samples = 1;
+                settings.recursion = 2;
+            }
+            1 => {
+                settings.resolution.0 = settings.resolution.0 / 2;
+                settings.resolution.1 = settings.resolution.1 / 2;
+                settings.samples = 1;
+                settings.recursion = 4;
+            }
+            2 => {
+                settings.samples = 4;
+                settings.recursion = 4;
+            }
+            3 => {
+                settings.samples = 4;
+                settings.recursion = 100;
+            }
+            4 => {
+                settings.samples = 64;
+                settings.recursion = 100;
+            }
+            5 => {
+                // return max settings
+            }
+            _more => return None,
+        }
+        Some(RenderTask::new(screen, settings))
     }
 }
 

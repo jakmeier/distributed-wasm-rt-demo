@@ -2,28 +2,26 @@ use js_sys::Uint32Array;
 use paddle::Rectangle;
 use web_sys::Worker;
 
+use crate::{SCREEN_H, SCREEN_W};
+
 #[derive(Debug)]
 pub struct RenderTask {
-    pub area: paddle::Rectangle,
+    pub screen_area: paddle::Rectangle,
     settings: RenderSettings,
 }
 
 #[derive(Debug, Clone)]
-struct RenderSettings {
-    resolution: (u32, u32),
-    samples: u32,
-    recursion: u32,
+pub struct RenderSettings {
+    pub resolution: (u32, u32),
+    pub samples: u32,
+    pub recursion: u32,
 }
 
 impl RenderTask {
-    pub fn new(area: paddle::Rectangle) -> Self {
+    pub fn new(screen_area: paddle::Rectangle, settings: RenderSettings) -> Self {
         Self {
-            area,
-            settings: RenderSettings {
-                resolution: (960, 720),
-                samples: 4,
-                recursion: 8,
-            },
+            screen_area,
+            settings,
         }
     }
 
@@ -35,11 +33,13 @@ impl RenderTask {
     }
 
     fn marshal(&self) -> Uint32Array {
+        let rx = self.settings.resolution.0 as f32 / SCREEN_W as f32;
+        let ry = self.settings.resolution.1 as f32 / SCREEN_H as f32;
         let job = api::RenderJob::new(
-            self.area.x() as u32,
-            self.area.y() as u32,
-            self.area.width() as u32,
-            self.area.height() as u32,
+            (self.screen_area.x() * rx) as u32,
+            (self.screen_area.y() * ry) as u32,
+            (self.screen_area.width() * rx) as u32,
+            (self.screen_area.height() * ry) as u32,
             self.settings.resolution.0,
             self.settings.resolution.1,
             self.settings.samples,
@@ -53,26 +53,26 @@ impl RenderTask {
     }
 
     pub fn divide(&self, num_tasks: u32) -> Vec<Self> {
-        let width = self.area.width() as u32;
-        let height = self.area.height() as u32;
+        let width = self.screen_area.width();
+        let height = self.screen_area.height();
 
         let num_columns = (num_tasks as f32).sqrt().ceil() as u32;
         let num_rows = (num_tasks as f32 / num_columns as f32).ceil() as u32;
 
-        let task_width = width / num_columns;
-        let task_height = height / num_rows;
+        let task_width = width / num_columns as f32;
+        let task_height = height / num_rows as f32;
 
         let mut tasks = Vec::new();
 
         for row in 0..num_rows {
             for col in 0..num_columns {
-                let x = col * task_width;
-                let y = row * task_height;
+                let x = col as f32 * task_width;
+                let y = row as f32 * task_height;
                 let width = task_width.min(width - x);
                 let height = task_height.min(height - y);
 
                 tasks.push(RenderTask {
-                    area: Rectangle::new((x, y), (width, height)),
+                    screen_area: Rectangle::new((x, y), (width, height)),
                     settings: self.settings.clone(),
                 });
             }
