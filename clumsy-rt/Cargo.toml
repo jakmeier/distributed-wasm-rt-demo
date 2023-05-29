@@ -5,6 +5,7 @@ name = "clumsy-rt"
 version = "0.1.0"
 
 [lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 getrandom = {version = "0.2", features = ["js"]}
@@ -12,3 +13,9 @@ nalgebra = "0.30"
 ncollide3d = "0.33"
 png = "0.17.8"
 rand = "0.8.5"
+
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+web-sys = {version = "0.3", features = ["console"]}
+
+api = {path = "../api"}

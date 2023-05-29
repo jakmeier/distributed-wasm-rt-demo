@@ -65,6 +65,7 @@ impl Camera {
             .collect::<Vec<_>>();
         buffer.collect_shards(&finished_shards);
     }
+
     fn render_shard(&self, scene: &Scene, w: usize, h: usize, shard: &mut PixelPlaneShard) {
         for y in 0..shard.h {
             for x in 0..shard.w {
@@ -86,7 +87,37 @@ impl Camera {
         }
     }
 
-    /// Computes a ray through the viewport with the given real pixel coordiantes (ranging from 0.0 to 1.0).
+    pub fn render_tile(
+        &self,
+        scene: &Scene,
+        start_x: usize,
+        start_y: usize,
+        full_w: usize,
+        full_h: usize,
+        out: &mut PixelPlane,
+    ) {
+        let start_y = full_h - start_y;
+        for y in start_y..start_y + out.h {
+            for x in start_x..start_x + out.w {
+                let mut col = Vector3::new(0.0, 0.0, 0.0);
+                for xs in 0..self.w_samples {
+                    for ys in 0..self.h_samples {
+                        let xi = x as f32 + xs as f32 / self.w_samples as f32;
+                        let yi = y as f32 + ys as f32 / self.h_samples as f32;
+                        let u = xi / (full_w - 1) as f32;
+                        let v = yi / (full_h - 1) as f32;
+                        let ray = self.get_ray(u, v);
+                        let ray_col = scene.cast_ray(&ray, self.n_recursion);
+                        col += ray_col;
+                    }
+                }
+                col /= (self.w_samples * self.h_samples) as f32;
+                out.set_pixel(x - start_x, out.h - 1 - (y - start_y), Pixel::rgb_vec(col));
+            }
+        }
+    }
+
+    /// Computes a ray through the viewport with the given real pixel coordinates (ranging from 0.0 to 1.0).
     fn get_ray(&self, u: f32, v: f32) -> Ray<f32> {
         Ray::new(
             self.origin.into(),

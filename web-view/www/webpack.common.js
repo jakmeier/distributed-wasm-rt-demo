@@ -21,6 +21,9 @@ module.exports = {
             patterns: [
                 // { from: 'assets/*.svg' },
                 { from: 'index.html' },
+                { from: 'worker.js' },
+                { from: 'clumsy_rt.js' },
+                { from: 'clumsy_rt_bg.wasm' },
             ]
         }),
     ],

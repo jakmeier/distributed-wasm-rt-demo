@@ -7,8 +7,19 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-clumsy-rt = {path = "../clumsy-rt"}
 paddle = {path = "../../gamedev/paddlers/paddle"}# TODO: release another beta or something
 
 wasm-bindgen = "0.2"
-web-sys = "0.3"
+js-sys = "0.3"
+
+api = { path = "../api" }
+
+[dependencies.web-sys]
+features = [
+  "console",
+  "Document",
+  "MessageEvent",
+  "Window",
+  "Worker",
+]
+version = "0.3"

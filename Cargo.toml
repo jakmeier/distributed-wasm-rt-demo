@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+  "api",
   "clumsy-rt",
   "web-view",
 ]

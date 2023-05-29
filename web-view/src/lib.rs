@@ -1,8 +1,10 @@
-use clumsy_rt::Scene;
-use paddle::println;
-use paddle::quicksilver_compat::about_equal;
 use paddle::*;
-use wasm_bindgen::prelude::wasm_bindgen;
+use render::RenderTask;
+use wasm_bindgen::prelude::{wasm_bindgen, Closure};
+use wasm_bindgen::JsCast;
+use web_sys::{MessageEvent, Worker};
+
+mod render;
 
 const SCREEN_W: u32 = 960;
 const SCREEN_H: u32 = 720;
@@ -17,14 +19,19 @@ pub fn start() {
 
     // Initialize framework state and connect to browser window
     paddle::init(config).expect("Paddle initialization failed.");
-    let state = Main {
-        scene: IncrementalSceneRenderer::new(clumsy_rt::sample_scenes::build_cool_scene()),
-    };
-    paddle::register_frame(state, (), (0, 0));
+    let state = Main::init();
+    let handle = paddle::register_frame(state, (), (0, 0));
+    handle.register_receiver(&Main::new_png_part);
+    handle.register_receiver(&Main::worker_ready);
 }
 
 struct Main {
-    scene: IncrementalSceneRenderer,
+    workers: Vec<PngRenderWorker>,
+    /// target number of workers
+    worker_num: usize,
+    job_pool: Vec<RenderTask>,
+
+    imgs: Vec<(ImageDesc, Rectangle)>,
 }
 
 impl paddle::Frame for Main {
@@ -34,83 +41,116 @@ impl paddle::Frame for Main {
 
     fn draw(&mut self, _state: &mut Self::State, canvas: &mut DisplayArea, _timestamp: f64) {
         canvas.fit_display(5.0);
-        if let Some(img) = self.scene.img() {
-            canvas.draw(&Rectangle::new_sized((SCREEN_W, SCREEN_H)), img);
+        for (img, area) in &self.imgs {
+            canvas.draw(area, img);
         }
     }
 
     fn update(&mut self, _state: &mut Self::State) {
-        self.scene.render();
-    }
-
-    fn pointer(&mut self, _state: &mut Self::State, _event: PointerEvent) {}
-}
-
-struct IncrementalSceneRenderer {
-    scene: Scene,
-    rendered: Vec<ImageDesc>,
-    tracker: Option<AssetLoadingTracker>,
-    cooldown: i64,
-}
-
-impl IncrementalSceneRenderer {
-    pub fn new(scene: Scene) -> Self {
-        Self {
-            scene,
-            rendered: vec![],
-            tracker: None,
-            cooldown: 0,
+        // while self.workers.len() > self.worker_num {
+        //     let worker = self.workers.pop().unwrap();
+        //     TODO: proper cleanup
+        //     worker.terminate();
+        // }
+        while self.workers.len() < self.worker_num {
+            self.workers.push(self.new_worker(self.workers.len()));
         }
-    }
 
-    pub fn render(&mut self) {
-        if self.cooldown > paddle::utc_now().timestamp() {
-            return;
-        }
-        if let Some(tracker) = &self.tracker {
-            if tracker.had_error() {
-                println!("there was an error")
-            } else if !about_equal(tracker.progress(), 1.0) {
-                self.ping_cooldown();
-                return;
+        for worker in &mut self.workers {
+            if worker.ready && worker.current_job.is_none() {
+                if let Some(job) = self.job_pool.pop() {
+                    worker.accept_task(job);
+                }
             }
         }
-        self.render_new_quality();
+    }
+}
+
+struct RawPngPart {
+    data: Vec<u8>,
+    worker_id: usize,
+}
+
+impl Main {
+    fn init() -> Self {
+        let screen = Rectangle::new_sized((SCREEN_W, SCREEN_H));
+        let job = RenderTask::new(screen);
+
+        Main {
+            // scene: IncrementalSceneRenderer::new(clumsy_rt::sample_scenes::build_cool_scene()),
+            workers: vec![],
+            worker_num: 10,
+            job_pool: job.divide(64),
+            imgs: vec![],
+        }
     }
 
-    pub fn img(&self) -> Option<&ImageDesc> {
-        self.rendered.last()
-    }
-
-    fn render_new_quality(&mut self) {
-        let quality = self.rendered.len();
-
-        let n_samples = 4 + 10 * quality;
-        let n_recursion = 4 + 10 * quality;
-        let n_threads = 1;
-        let w = 480;
-        let h = 360;
-
-        let mut img = clumsy_rt::PixelPlane::new(w, h);
-        let camera = clumsy_rt::Camera::new(n_samples, n_recursion);
-        println!(
-            "[{:#}] Rendering quality {quality} starts",
-            paddle::utc_now()
-        );
-        camera.render(self.scene.clone(), &mut img, n_threads);
-        println!("[{:#}] Rendering quality {quality} done", paddle::utc_now());
-
-        let mut buf = Vec::new();
-        img.write_png(&mut buf).unwrap();
-        let img_desc = ImageDesc::from_png_binary(&buf).unwrap();
+    /// paddle event listener
+    fn new_png_part(&mut self, _state: &mut (), msg: RawPngPart) {
+        let img_desc = ImageDesc::from_png_binary(&msg.data).unwrap();
         let mut bundle = AssetBundle::new();
         bundle.add_images(&[img_desc]);
-        self.tracker = Some(bundle.load());
-        self.rendered.push(img_desc);
-        self.ping_cooldown();
+        let _tracker = bundle.load();
+
+        let job = self.workers[msg.worker_id]
+            .current_job
+            .take()
+            .expect("response without job?");
+        self.imgs.push((img_desc, job.area));
     }
 
-    fn ping_cooldown(&mut self) {
-        self.cooldown = paddle::utc_now().timestamp() + 1;
+    /// paddle event listener
+    fn worker_ready(&mut self, _state: &mut (), WorkerReady(worker_id): WorkerReady) {
+        self.workers[worker_id].ready = true;
+    }
+
+    fn new_worker(&self, worker_id: usize) -> PngRenderWorker {
+        let worker = web_sys::Worker::new("./worker.js").expect("Failed to create worker");
+
+        let rx = move |evt: MessageEvent| {
+            if let Ok(array) = evt.data().dyn_into::<js_sys::Uint8Array>() {
+                let array = js_sys::Array::from(&array);
+                let raw: Vec<u8> = (0..array.length())
+                    .map(|i| array.get(i).as_f64().unwrap_or(0.0) as u8)
+                    .collect();
+
+                paddle::send::<_, Main>(RawPngPart {
+                    data: raw,
+                    worker_id,
+                })
+            } else if let Some(s) = evt.data().as_string() {
+                match s.as_str() {
+                    "ready" => paddle::send::<_, Main>(WorkerReady(worker_id)),
+                    _ => {}
+                }
+            } else {
+                paddle::println!("Unexpected message type!");
+            }
+        };
+        let _worker_rx = Closure::wrap(Box::new(rx) as Box<dyn FnMut(MessageEvent)>);
+        worker.set_onmessage(Some(_worker_rx.as_ref().dyn_ref().unwrap()));
+        PngRenderWorker {
+            worker,
+            _worker_rx,
+            current_job: None,
+            ready: false,
+        }
+    }
+}
+
+struct WorkerReady(usize);
+
+struct PngRenderWorker {
+    worker: Worker,
+    _worker_rx: Closure<dyn FnMut(MessageEvent)>,
+    current_job: Option<RenderTask>,
+    ready: bool,
+}
+
+impl PngRenderWorker {
+    fn accept_task(&mut self, task: RenderTask) {
+        assert!(self.current_job.is_none());
+        task.submit_to_worker(&self.worker);
+        self.current_job = Some(task);
     }
 }

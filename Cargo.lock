@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "api"
+version = "0.1.0"
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -87,11 +91,15 @@ dependencies = [
 name = "clumsy-rt"
 version = "0.1.0"
 dependencies = [
+ "api",
  "getrandom 0.2.9",
+ "js-sys",
  "nalgebra",
  "ncollide3d",
  "png",
  "rand 0.8.5",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -869,7 +877,8 @@ dependencies = [
 name = "web-view"
 version = "0.1.0"
 dependencies = [
- "clumsy-rt",
+ "api",
+ "js-sys",
  "paddle",
  "wasm-bindgen",
  "web-sys",
