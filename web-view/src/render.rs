@@ -1,8 +1,8 @@
 use js_sys::Uint32Array;
-use paddle::Rectangle;
+use paddle::{Frame, Rectangle};
 use web_sys::Worker;
 
-use crate::{SCREEN_H, SCREEN_W};
+use crate::{Main, SCREEN_H, SCREEN_W};
 
 #[derive(Debug)]
 pub struct RenderTask {
@@ -33,8 +33,8 @@ impl RenderTask {
     }
 
     fn marshal(&self) -> Uint32Array {
-        let rx = self.settings.resolution.0 as f32 / SCREEN_W as f32;
-        let ry = self.settings.resolution.1 as f32 / SCREEN_H as f32;
+        let rx = self.settings.resolution.0 as f32 / Main::WIDTH as f32;
+        let ry = self.settings.resolution.1 as f32 / Main::HEIGHT as f32;
         let job = api::RenderJob::new(
             (self.screen_area.x() * rx) as u32,
             (self.screen_area.y() * ry) as u32,

@@ -1,13 +1,15 @@
 use paddle::*;
+use progress::{ProgressMade, ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::{wasm_bindgen, Closure};
 use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, Worker};
 
+mod progress;
 mod render;
 
-const SCREEN_W: u32 = 960;
-const SCREEN_H: u32 = 720;
+const SCREEN_W: u32 = 1080;
+const SCREEN_H: u32 = 1080;
 
 #[wasm_bindgen]
 pub fn start() {
@@ -20,9 +22,13 @@ pub fn start() {
     // Initialize framework state and connect to browser window
     paddle::init(config).expect("Paddle initialization failed.");
     let state = Main::init();
-    let handle = paddle::register_frame(state, (), (0, 0));
-    handle.register_receiver(&Main::new_png_part);
-    handle.register_receiver(&Main::worker_ready);
+    let main_handle = paddle::register_frame(state, (), (40, 0));
+    main_handle.register_receiver(&Main::new_png_part);
+    main_handle.register_receiver(&Main::worker_ready);
+    main_handle.register_receiver(&Main::ping_next_job);
+    let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, 740));
+    progress_handle.register_receiver(&RenderProgress::progress_reset);
+    progress_handle.register_receiver(&RenderProgress::progress_update);
 }
 
 struct Main {
@@ -30,7 +36,7 @@ struct Main {
     /// target number of workers
     worker_num: usize,
     job_pool: Vec<RenderTask>,
-    current_quality: u32,
+    next_quality: u32,
 
     /// Stack of all images rendered, drawn in the order they were added and
     /// potentially covering older images.
@@ -42,10 +48,12 @@ struct Main {
     old_images: usize,
 }
 
+struct RequestNewRender;
+
 impl paddle::Frame for Main {
     type State = ();
-    const WIDTH: u32 = SCREEN_W;
-    const HEIGHT: u32 = SCREEN_H;
+    const WIDTH: u32 = 960;
+    const HEIGHT: u32 = 720;
 
     fn draw(&mut self, _state: &mut Self::State, canvas: &mut DisplayArea, _timestamp: f64) {
         canvas.fit_display(5.0);
@@ -77,7 +85,7 @@ impl paddle::Frame for Main {
         if key.event_type() == KeyEventType::KeyPress {
             match key.key() {
                 Key::Space => {
-                    self.ping_next_job();
+                    self.ping_next_job(_state, RequestNewRender);
                 }
                 _ => {}
             }
@@ -92,29 +100,26 @@ struct RawPngPart {
 
 impl Main {
     fn init() -> Self {
-        let quality = 0;
-        let job = Self::new_full_screen_job(quality).unwrap();
-        let num_starter_jobs = 64;
-
         Main {
             workers: vec![],
             worker_num: 10,
-            job_pool: job.divide(num_starter_jobs),
-            current_quality: quality,
+            job_pool: vec![],
+            next_quality: 0,
             imgs: vec![],
             old_images: 0,
-            outstanding_jobs: num_starter_jobs as usize,
+            outstanding_jobs: 0,
         }
     }
 
     /// Starts new job if the old isn no longer running
-    fn ping_next_job(&mut self) {
+    ///
+    /// paddle event listener
+    fn ping_next_job(&mut self, _: &mut (), _msg: RequestNewRender) {
         if self.outstanding_jobs == 0 {
-            self.current_quality += 1;
             if self.old_images > 0 {
                 self.imgs.drain(..self.old_images);
             }
-            let num_new_jobs = match self.current_quality {
+            let num_new_jobs = match self.next_quality {
                 0..=2 => 64,
                 3..=4 => 256,
                 _ => 512,
@@ -122,8 +127,12 @@ impl Main {
 
             self.old_images = self.imgs.len();
             self.outstanding_jobs = num_new_jobs;
-            if let Some(job) = Self::new_full_screen_job(self.current_quality) {
+            if let Some(job) = Self::new_full_screen_job(self.next_quality) {
                 self.job_pool = job.divide(num_new_jobs as u32);
+                paddle::send::<_, RenderProgress>(ProgressReset {
+                    work_items: num_new_jobs,
+                });
+                self.next_quality += 1;
             }
         }
     }
@@ -141,6 +150,7 @@ impl Main {
             .expect("response without job?");
         self.imgs.push((img_desc, job.screen_area));
         self.outstanding_jobs -= 1;
+        paddle::send::<_, RenderProgress>(ProgressMade {});
     }
 
     /// paddle event listener
@@ -182,7 +192,7 @@ impl Main {
     }
 
     fn new_full_screen_job(quality: u32) -> Option<RenderTask> {
-        let screen = Rectangle::new_sized((SCREEN_W, SCREEN_H));
+        let screen = Rectangle::new_sized((Main::WIDTH, Main::HEIGHT));
         let mut settings = RenderSettings {
             resolution: (screen.width() as u32, screen.height() as u32),
             samples: 512,
