@@ -13,17 +13,9 @@ pub mod sample_scenes;
 pub use camera::*;
 pub use pixel::*;
 pub use reflection::*;
+pub use render_job::RenderJobExt;
 pub use scene::*;
 pub use texture::*;
 
-use api::RenderJob;
-use js_sys::Uint32Array;
-use render_job::RenderJobExt;
-use wasm_bindgen::prelude::wasm_bindgen;
-
-#[wasm_bindgen]
-pub fn render(array: Uint32Array) -> Vec<u8> {
-    let vec: Vec<u32> = Uint32Array::from(array).to_vec();
-    let job = RenderJob::try_from_slice(&vec).unwrap();
-    job.render()
-}
+#[cfg(feature = "web")]
+mod web_api;

@@ -46,7 +46,7 @@ impl RenderTask {
             self.settings.recursion,
         );
 
-        let vec = job.as_vec();
+        let vec = job.to_vec();
         let array = Uint32Array::new_with_length(vec.len() as u32);
         array.copy_from(&vec);
         array

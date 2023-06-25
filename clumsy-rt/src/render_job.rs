@@ -27,3 +27,12 @@ impl RenderJobExt for RenderJob {
         buf
     }
 }
+
+#[test]
+fn smoke_test() {
+    RenderJob::new(0, 0, 128, 128, 128, 128, 1, 1).render();
+    RenderJob::new(0, 0, 96, 54, 960, 540, 2, 2).render();
+    RenderJob::new(0, 0, 96, 54, 96, 54, 2, 2).render();
+    RenderJob::new(48, 0, 48, 27, 96, 54, 2, 2).render();
+    RenderJob::new(150, 157, 30, 22, 240, 180, 1, 2).render();
+}
