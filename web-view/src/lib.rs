@@ -2,7 +2,7 @@ use paddle::*;
 use progress::{ProgressMade, ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::wasm_bindgen;
-use worker::{PngRenderWorker, Worker};
+use worker::PngRenderWorker;
 
 mod progress;
 mod render;
@@ -32,7 +32,7 @@ pub fn start() {
 }
 
 struct Main {
-    workers: Vec<Box<dyn Worker>>,
+    workers: Vec<PngRenderWorker>,
     /// target number of workers
     worker_num: usize,
     job_pool: Vec<RenderTask>,
@@ -70,7 +70,7 @@ impl paddle::Frame for Main {
         // }
         while self.workers.len() < self.worker_num {
             self.workers
-                .push(Box::new(PngRenderWorker::new(self.workers.len())));
+                .push(PngRenderWorker::new(self.workers.len(), None));
         }
 
         for worker in &mut self.workers {

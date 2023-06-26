@@ -7,19 +7,21 @@ use crate::RawPngPart;
 
 pub(crate) struct WorkerReady(pub usize);
 
-pub(crate) trait Worker {
-    fn accept_task(&mut self, task: RenderTask);
-    fn current_task(&self) -> &Option<RenderTask>;
-    fn clear_task(&mut self) -> Option<RenderTask>;
-    fn ready(&self) -> bool;
-    fn set_ready(&mut self, yes: bool);
-}
-
 pub(crate) struct PngRenderWorker {
-    worker: web_sys::Worker,
-    _worker_rx: Closure<dyn FnMut(MessageEvent)>,
     current_job: Option<RenderTask>,
     ready: bool,
+    ctx: Box<dyn TaskRenderer>,
+}
+pub(crate) trait TaskRenderer {
+    /// Enqueues a new task that will be executed eventually.
+    ///
+    /// When the task finishes, it will send a `RawPngPart`.
+    fn submit(&self, task: &RenderTask);
+}
+
+pub(crate) struct LocalWorkerContext {
+    worker: web_sys::Worker,
+    _worker_rx: Closure<dyn FnMut(MessageEvent)>,
 }
 
 // pub(crate) struct RemoteWorker {
@@ -27,32 +29,51 @@ pub(crate) struct PngRenderWorker {
 //     ready: bool,
 // }
 
-impl Worker for PngRenderWorker {
-    fn accept_task(&mut self, task: RenderTask) {
-        assert!(self.current_job.is_none());
-        task.submit_to_worker(&self.worker);
-        self.current_job = Some(task);
-    }
-
-    fn current_task(&self) -> &Option<RenderTask> {
-        &self.current_job
-    }
-
-    fn clear_task(&mut self) -> Option<RenderTask> {
-        self.current_job.take()
-    }
-
-    fn ready(&self) -> bool {
-        self.ready
-    }
-
-    fn set_ready(&mut self, yes: bool) {
-        self.ready = yes;
+impl TaskRenderer for LocalWorkerContext {
+    fn submit(&self, task: &RenderTask) {
+        task.submit_to_local_worker(&self.worker);
     }
 }
 
 impl PngRenderWorker {
-    pub fn new(worker_id: usize) -> Self {
+    pub fn new(worker_id: usize, remote_url: Option<String>) -> Self {
+        let ctx = if let Some(url) = remote_url {
+            todo!()
+        } else {
+            LocalWorkerContext::new(worker_id)
+        };
+        PngRenderWorker {
+            current_job: None,
+            ready: false,
+            ctx: Box::new(ctx),
+        }
+    }
+
+    pub fn accept_task(&mut self, task: RenderTask) {
+        assert!(self.current_job.is_none());
+        self.ctx.submit(&task);
+        self.current_job = Some(task);
+    }
+
+    pub fn current_task(&self) -> &Option<RenderTask> {
+        &self.current_job
+    }
+
+    pub fn clear_task(&mut self) -> Option<RenderTask> {
+        self.current_job.take()
+    }
+
+    pub fn ready(&self) -> bool {
+        self.ready
+    }
+
+    pub fn set_ready(&mut self, yes: bool) {
+        self.ready = yes;
+    }
+}
+
+impl LocalWorkerContext {
+    fn new(worker_id: usize) -> Self {
         let worker = web_sys::Worker::new("./worker.js").expect("Failed to create worker");
 
         let rx = move |evt: MessageEvent| {
@@ -77,11 +98,6 @@ impl PngRenderWorker {
         };
         let _worker_rx = Closure::wrap(Box::new(rx) as Box<dyn FnMut(MessageEvent)>);
         worker.set_onmessage(Some(_worker_rx.as_ref().dyn_ref().unwrap()));
-        PngRenderWorker {
-            worker,
-            _worker_rx,
-            current_job: None,
-            ready: false,
-        }
+        LocalWorkerContext { worker, _worker_rx }
     }
 }

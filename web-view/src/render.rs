@@ -2,7 +2,7 @@ use js_sys::Uint32Array;
 use paddle::{Frame, Rectangle};
 use web_sys::Worker;
 
-use crate::{Main, SCREEN_H, SCREEN_W};
+use crate::Main;
 
 #[derive(Debug)]
 pub struct RenderTask {
@@ -25,7 +25,7 @@ impl RenderTask {
         }
     }
 
-    pub fn submit_to_worker(&self, worker: &Worker) {
+    pub fn submit_to_local_worker(&self, worker: &Worker) {
         let msg = self.marshal();
         worker
             .post_message(&msg)
