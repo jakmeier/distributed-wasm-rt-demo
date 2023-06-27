@@ -17,6 +17,7 @@ pub fn start() {
     let config = PaddleConfig::default()
         .with_canvas_id("paddle-canvas-id")
         .with_resolution((SCREEN_W, SCREEN_H))
+        .with_text_board(Rectangle::new((100, 100), (500, 500)))
         .with_texture_config(TextureConfig::default().without_filter());
 
     // Initialize framework state and connect to browser window
@@ -29,6 +30,8 @@ pub fn start() {
     let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, 740));
     progress_handle.register_receiver(&RenderProgress::progress_reset);
     progress_handle.register_receiver(&RenderProgress::progress_update);
+
+    paddle::println!("started");
 }
 
 struct Main {
@@ -70,7 +73,11 @@ impl paddle::Frame for Main {
         // }
         while self.workers.len() < self.worker_num {
             self.workers
-                .push(PngRenderWorker::new(self.workers.len(), None));
+                // .push(PngRenderWorker::new(self.workers.len(), None));
+                .push(PngRenderWorker::new(
+                    self.workers.len(),
+                    Some("http://127.0.0.1:3000".to_owned()),
+                ));
         }
 
         for worker in &mut self.workers {
@@ -94,8 +101,8 @@ impl paddle::Frame for Main {
     }
 }
 
-struct RawPngPart {
-    data: Vec<u8>,
+struct PngPart {
+    img: ImageDesc,
     worker_id: usize,
 }
 
@@ -139,17 +146,16 @@ impl Main {
     }
 
     /// paddle event listener
-    fn new_png_part(&mut self, _state: &mut (), msg: RawPngPart) {
-        let img_desc = ImageDesc::from_png_binary(&msg.data).unwrap();
+    fn new_png_part(&mut self, _state: &mut (), msg: PngPart) {
         let mut bundle = AssetBundle::new();
-        bundle.add_images(&[img_desc]);
-        let _tracker = bundle.load();
+        bundle.add_images(&[msg.img]);
+        bundle.load();
 
         let job = self.workers[msg.worker_id]
             .clear_task()
             .take()
             .expect("response without job?");
-        self.imgs.push((img_desc, job.screen_area));
+        self.imgs.push((msg.img, job.screen_area));
         self.outstanding_jobs -= 1;
         paddle::send::<_, RenderProgress>(ProgressMade {});
     }

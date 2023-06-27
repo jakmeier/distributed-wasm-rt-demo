@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clumsy_rt::RenderJobExt;
 use spin_sdk::{
     http::{Request, Response},
@@ -9,9 +9,7 @@ use std::str::FromStr;
 /// A simple Spin HTTP component.
 #[http_component]
 fn handle_spin_component(req: Request) -> Result<Response> {
-    let bytes = req.body().as_ref().context("requires body")?;
-    let string = std::str::from_utf8(bytes)?;
-    let job = api::RenderJob::from_str(string)?;
+    let job = api::RenderJob::from_str(req.uri().path())?;
 
     println!("{job:?}");
     let dt = std::time::Instant::now();
@@ -21,5 +19,6 @@ fn handle_spin_component(req: Request) -> Result<Response> {
     Ok(http::Response::builder()
         .status(200)
         .header("Content-Type", "image/png")
+        .header("Access-Control-Allow-Origin", "*")
         .body(Some(reponse_bytes.into()))?)
 }

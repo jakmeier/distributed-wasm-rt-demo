@@ -1,6 +1,4 @@
-use js_sys::Uint32Array;
 use paddle::{Frame, Rectangle};
-use web_sys::Worker;
 
 use crate::Main;
 
@@ -25,17 +23,10 @@ impl RenderTask {
         }
     }
 
-    pub fn submit_to_local_worker(&self, worker: &Worker) {
-        let msg = self.marshal();
-        worker
-            .post_message(&msg)
-            .expect("Failed posting job to worker");
-    }
-
-    fn marshal(&self) -> Uint32Array {
+    pub(crate) fn marshal(&self) -> api::RenderJob {
         let rx = self.settings.resolution.0 as f32 / Main::WIDTH as f32;
         let ry = self.settings.resolution.1 as f32 / Main::HEIGHT as f32;
-        let job = api::RenderJob::new(
+        api::RenderJob::new(
             (self.screen_area.x() * rx) as u32,
             (self.screen_area.y() * ry) as u32,
             (self.screen_area.width() * rx) as u32,
@@ -44,12 +35,7 @@ impl RenderTask {
             self.settings.resolution.1,
             self.settings.samples,
             self.settings.recursion,
-        );
-
-        let vec = job.to_vec();
-        let array = Uint32Array::new_with_length(vec.len() as u32);
-        array.copy_from(&vec);
-        array
+        )
     }
 
     pub fn divide(&self, num_tasks: u32) -> Vec<Self> {

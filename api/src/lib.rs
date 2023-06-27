@@ -72,7 +72,7 @@ impl Display for RenderJob {
         let mut nums = vec.drain(..);
         write!(f, "{}", nums.next().unwrap())?;
         for num in nums {
-            write!(f, ",{num}")?;
+            write!(f, "/{num}")?;
         }
         Ok(())
     }
@@ -83,7 +83,8 @@ impl FromStr for RenderJob {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let vec: Vec<u32> = s
-            .split(',')
+            .split('/')
+            .filter(|s| !s.is_empty())
             .map(u32::from_str)
             .collect::<Result<_, ParseIntError>>()?;
 

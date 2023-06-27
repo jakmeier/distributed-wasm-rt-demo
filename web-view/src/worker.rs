@@ -1,9 +1,11 @@
+use js_sys::Uint32Array;
+use paddle::ImageDesc;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::MessageEvent;
 
 use crate::render::RenderTask;
-use crate::RawPngPart;
+use crate::PngPart;
 
 pub(crate) struct WorkerReady(pub usize);
 
@@ -15,7 +17,7 @@ pub(crate) struct PngRenderWorker {
 pub(crate) trait TaskRenderer {
     /// Enqueues a new task that will be executed eventually.
     ///
-    /// When the task finishes, it will send a `RawPngPart`.
+    /// When the task finishes, it will send a `PngPart`.
     fn submit(&self, task: &RenderTask);
 }
 
@@ -24,28 +26,53 @@ pub(crate) struct LocalWorkerContext {
     _worker_rx: Closure<dyn FnMut(MessageEvent)>,
 }
 
-// pub(crate) struct RemoteWorker {
-//     current_job: Option<RenderTask>,
-//     ready: bool,
-// }
+pub(crate) struct RemoteWorkerContext {
+    url: String,
+    worker_id: usize,
+}
 
 impl TaskRenderer for LocalWorkerContext {
     fn submit(&self, task: &RenderTask) {
-        task.submit_to_local_worker(&self.worker);
+        let vec = task.marshal().to_vec();
+        let array = Uint32Array::new_with_length(vec.len() as u32);
+        array.copy_from(&vec);
+
+        self.worker
+            .post_message(&array)
+            .expect("Failed posting job to worker");
+    }
+}
+
+impl TaskRenderer for RemoteWorkerContext {
+    fn submit(&self, task: &RenderTask) {
+        let full_url = format!("{}/{}", self.url, task.marshal());
+        let static_url = Box::leak(full_url.into_boxed_str());
+        paddle::println!("loading image at {}", static_url);
+        paddle::send::<_, crate::Main>(PngPart {
+            img: ImageDesc::from_path(static_url),
+            worker_id: self.worker_id,
+        })
+    }
+}
+
+impl RemoteWorkerContext {
+    pub(crate) fn new(url: String, worker_id: usize) -> Self {
+        paddle::send::<_, crate::Main>(WorkerReady(worker_id));
+        Self { url, worker_id }
     }
 }
 
 impl PngRenderWorker {
     pub fn new(worker_id: usize, remote_url: Option<String>) -> Self {
-        let ctx = if let Some(url) = remote_url {
-            todo!()
+        let ctx: Box<dyn TaskRenderer> = if let Some(url) = remote_url {
+            Box::new(RemoteWorkerContext::new(url, worker_id))
         } else {
-            LocalWorkerContext::new(worker_id)
+            Box::new(LocalWorkerContext::new(worker_id))
         };
         PngRenderWorker {
             current_job: None,
             ready: false,
-            ctx: Box::new(ctx),
+            ctx,
         }
     }
 
@@ -83,8 +110,8 @@ impl LocalWorkerContext {
                     .map(|i| array.get(i).as_f64().unwrap_or(0.0) as u8)
                     .collect();
 
-                paddle::send::<_, crate::Main>(RawPngPart {
-                    data: raw,
+                paddle::send::<_, crate::Main>(PngPart {
+                    img: ImageDesc::from_png_binary(&raw).unwrap(),
                     worker_id,
                 })
             } else if let Some(s) = evt.data().as_string() {
