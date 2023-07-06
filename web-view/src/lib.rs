@@ -1,12 +1,13 @@
 use paddle::*;
-use progress::{ProgressMade, ProgressReset, RenderProgress};
+use progress::{ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::wasm_bindgen;
-use worker::PngRenderWorker;
+use worker_view::WorkerView;
 
 mod progress;
 mod render;
 mod worker;
+mod worker_view;
 
 const SCREEN_W: u32 = 1080;
 const SCREEN_H: u32 = 1080;
@@ -23,22 +24,25 @@ pub fn start() {
     // Initialize framework state and connect to browser window
     paddle::init(config).expect("Paddle initialization failed.");
     let state = Main::init();
+
     let main_handle = paddle::register_frame(state, (), (40, 0));
     main_handle.register_receiver(&Main::new_png_part);
-    main_handle.register_receiver(&Main::worker_ready);
     main_handle.register_receiver(&Main::ping_next_job);
+
     let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, 740));
     progress_handle.register_receiver(&RenderProgress::progress_reset);
     progress_handle.register_receiver(&RenderProgress::progress_update);
 
-    paddle::println!("started");
+    let worker_handle =
+        paddle::register_frame_no_state(WorkerView::new(), (40 + RenderProgress::WIDTH + 5, 740));
+    worker_handle.register_receiver(&WorkerView::worker_ready);
+    worker_handle.register_receiver(&WorkerView::new_jobs);
+    worker_handle.register_receiver(&WorkerView::job_done);
+    worker_handle.listen(&WorkerView::add_worker);
 }
 
 struct Main {
-    workers: Vec<PngRenderWorker>,
-    /// target number of workers
-    worker_num: usize,
-    job_pool: Vec<RenderTask>,
+    /// Image is rendered in increasing quality each time triggered.
     next_quality: u32,
 
     /// Stack of all images rendered, drawn in the order they were added and
@@ -55,37 +59,13 @@ struct RequestNewRender;
 
 impl paddle::Frame for Main {
     type State = ();
-    const WIDTH: u32 = 960;
+    const WIDTH: u32 = SCREEN_W;
     const HEIGHT: u32 = 720;
 
     fn draw(&mut self, _state: &mut Self::State, canvas: &mut DisplayArea, _timestamp: f64) {
         canvas.fit_display(5.0);
         for (img, area) in &self.imgs {
             canvas.draw(area, img);
-        }
-    }
-
-    fn update(&mut self, _state: &mut Self::State) {
-        // while self.workers.len() > self.worker_num {
-        //     let worker = self.workers.pop().unwrap();
-        //     TODO: proper cleanup
-        //     worker.terminate();
-        // }
-        while self.workers.len() < self.worker_num {
-            self.workers
-                // .push(PngRenderWorker::new(self.workers.len(), None));
-                .push(PngRenderWorker::new(
-                    self.workers.len(),
-                    Some("http://127.0.0.1:3000".to_owned()),
-                ));
-        }
-
-        for worker in &mut self.workers {
-            if worker.ready() && worker.current_task().is_none() {
-                if let Some(job) = self.job_pool.pop() {
-                    worker.accept_task(job);
-                }
-            }
         }
     }
 
@@ -103,15 +83,12 @@ impl paddle::Frame for Main {
 
 struct PngPart {
     img: ImageDesc,
-    worker_id: usize,
+    screen_area: Rectangle,
 }
 
 impl Main {
     fn init() -> Self {
         Main {
-            workers: vec![],
-            worker_num: 10,
-            job_pool: vec![],
             next_quality: 0,
             imgs: vec![],
             old_images: 0,
@@ -136,7 +113,8 @@ impl Main {
             self.old_images = self.imgs.len();
             self.outstanding_jobs = num_new_jobs;
             if let Some(job) = Self::new_full_screen_job(self.next_quality) {
-                self.job_pool = job.divide(num_new_jobs as u32);
+                let jobs = job.divide(num_new_jobs as u32);
+                paddle::send::<_, WorkerView>(jobs);
                 paddle::send::<_, RenderProgress>(ProgressReset {
                     work_items: num_new_jobs,
                 });
@@ -151,22 +129,8 @@ impl Main {
         bundle.add_images(&[msg.img]);
         bundle.load();
 
-        let job = self.workers[msg.worker_id]
-            .clear_task()
-            .take()
-            .expect("response without job?");
-        self.imgs.push((msg.img, job.screen_area));
-        self.outstanding_jobs -= 1;
-        paddle::send::<_, RenderProgress>(ProgressMade {});
-    }
-
-    /// paddle event listener
-    fn worker_ready(
-        &mut self,
-        _state: &mut (),
-        worker::WorkerReady(worker_id): worker::WorkerReady,
-    ) {
-        self.workers[worker_id].set_ready(true);
+        self.imgs.push((msg.img, msg.screen_area));
+        self.outstanding_jobs = self.outstanding_jobs.saturating_sub(1);
     }
 
     fn new_full_screen_job(quality: u32) -> Option<RenderTask> {

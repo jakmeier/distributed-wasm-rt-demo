@@ -1097,9 +1097,11 @@ name = "web-view"
 version = "0.1.0"
 dependencies = [
  "api",
+ "chrono",
  "js-sys",
  "paddle",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

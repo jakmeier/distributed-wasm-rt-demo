@@ -6,14 +6,14 @@ const EMPTY: Color = Color::new(0.0, 0.0, 0.1);
 const FULL: Color = Color::new(0.4, 0.4, 0.7);
 
 pub struct RenderProgress {
-    // TODO: per worker progress
     total: usize,
     done: usize,
     text: FloatingText,
 }
 
 pub struct ProgressMade {
-    // TODO: worker info
+    pub worker_id: usize,
+    pub time: std::time::Duration,
 }
 
 pub struct ProgressReset {
@@ -23,7 +23,7 @@ pub struct ProgressReset {
 impl Frame for RenderProgress {
     type State = ();
 
-    const WIDTH: u32 = 960;
+    const WIDTH: u32 = 410;
     const HEIGHT: u32 = 320;
 
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
@@ -80,7 +80,7 @@ impl Frame for RenderProgress {
         #[allow(unused_assignments)]
         let mut tmp = String::new();
         let msg = if done {
-            "> press to render better image <"
+            "> render <"
         } else {
             tmp = format!("{:2.0}%", progress * 100.0);
             &tmp
