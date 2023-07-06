@@ -1,7 +1,7 @@
 use paddle::quicksilver_compat::{Circle, Color, Shape};
 use paddle::{FloatingText, Frame, PointerEventType, Rectangle, Transform};
 
-use crate::SCREEN_H;
+use crate::{Button, SCREEN_H};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 const EMPTY: Color = Color::new(0.0, 0.0, 0.1);
@@ -10,7 +10,13 @@ const FULL: Color = Color::new(0.4, 0.4, 0.7);
 pub struct RenderProgress {
     total: usize,
     done: usize,
-    text: FloatingText,
+    bar_text: FloatingText,
+
+    total_time: std::time::Duration,
+    start: chrono::NaiveDateTime,
+    sub_text: Vec<FloatingText>,
+
+    stop_button: Button,
 }
 
 pub struct ProgressMade {
@@ -35,6 +41,7 @@ impl Frame for RenderProgress {
             if event.pos().overlaps(&hitbox) {
                 paddle::send::<_, crate::Main>(crate::RequestNewRender);
             }
+            self.stop_button.click(event.pos());
         }
     }
 
@@ -87,7 +94,7 @@ impl Frame for RenderProgress {
             tmp = format!("{:2.0}%", progress * 100.0);
             &tmp
         };
-        self.text
+        self.bar_text
             .write(
                 &canvas,
                 &full_progress_bar.transformed_bounding_box(bar_pos),
@@ -96,22 +103,55 @@ impl Frame for RenderProgress {
                 msg,
             )
             .unwrap();
-        self.text.draw();
+        self.bar_text.draw();
+
+        for (i, text) in self.sub_text.iter_mut().enumerate() {
+            text.update_position(
+                &canvas
+                    .frame_to_display_area(Rectangle::new((10, 150 + i * 100), (Self::WIDTH, 100))),
+                z,
+            )
+            .unwrap();
+            text.draw();
+        }
+
+        self.stop_button.draw(canvas);
     }
 }
 
 impl RenderProgress {
     pub fn new() -> Self {
+        let bar_text = FloatingText::new_styled(
+            &Rectangle::default(),
+            "".to_owned(),
+            &[("color", "white"), ("font-size", "x-large")],
+            &[],
+        )
+        .unwrap();
+        fn subtext() -> FloatingText {
+            FloatingText::new_styled(
+                &Rectangle::default(),
+                "".to_owned(),
+                &[("color", "white"), ("font-size", "large")],
+                &[],
+            )
+            .unwrap()
+        }
+
+        let sub_text = vec![subtext(), subtext()];
         Self {
             done: 0,
             total: 0,
-            text: FloatingText::new_styled(
-                &Rectangle::default(),
-                "".to_owned(),
-                &[("color", "white"), ("font-size", "x-large")],
-                &[],
-            )
-            .unwrap(),
+            bar_text,
+            start: Default::default(),
+            sub_text,
+            total_time: Default::default(),
+            stop_button: Button::new(
+                Rectangle::new((10, Self::HEIGHT - 110), (Self::WIDTH - 20, 100)),
+                Color::RED,
+                crate::Stop,
+                "stop".to_owned(),
+            ),
         }
     }
 
@@ -122,13 +162,31 @@ impl RenderProgress {
     }
 
     /// paddle event listener
-    pub fn progress_update(&mut self, _state: &mut (), _msg: ProgressMade) {
+    pub fn progress_update(&mut self, _state: &mut (), msg: ProgressMade) {
+        self.total_time += msg.time;
         self.done += 1;
+        if self.done == self.total {
+            let latency = paddle::utc_now()
+                .signed_duration_since(self.start)
+                .to_std()
+                .unwrap();
+            self.sub_text[0].update_text(&format!("Finished in {latency:#.1?}"));
+        }
+        self.sub_text[1].update_text(&format!("Total compute: {:#.1?}", self.total_time));
     }
 
     /// paddle event listener
     pub fn progress_reset(&mut self, _state: &mut (), msg: ProgressReset) {
         self.total = msg.work_items;
         self.done = 0;
+        self.total_time = Default::default();
+        self.start = paddle::utc_now();
+        self.sub_text[0].update_text("");
+        self.sub_text[1].update_text("");
+    }
+
+    /// paddle event listener
+    pub(crate) fn stop(&mut self, _state: &mut (), _msg: &crate::Stop) {
+        self.progress_reset(_state, ProgressReset { work_items: 0 });
     }
 }

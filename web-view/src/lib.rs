@@ -1,3 +1,4 @@
+use paddle::quicksilver_compat::{Color, Shape};
 use paddle::*;
 use progress::{ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
@@ -28,11 +29,13 @@ pub fn start() {
     let main_handle = paddle::register_frame(state, (), (40, 0));
     main_handle.register_receiver(&Main::new_png_part);
     main_handle.register_receiver(&Main::ping_next_job);
+    main_handle.listen(&Main::stop);
 
     let lower_y = Main::HEIGHT + 5;
     let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, lower_y));
     progress_handle.register_receiver(&RenderProgress::progress_reset);
     progress_handle.register_receiver(&RenderProgress::progress_update);
+    progress_handle.listen(&RenderProgress::stop);
 
     let worker_handle = paddle::register_frame_no_state(
         WorkerView::new(),
@@ -42,6 +45,9 @@ pub fn start() {
     worker_handle.register_receiver(&WorkerView::new_jobs);
     worker_handle.register_receiver(&WorkerView::job_done);
     worker_handle.listen(&WorkerView::add_worker);
+    worker_handle.listen(&WorkerView::stop);
+
+    paddle::share(worker_view::AddWorker { remote: false });
 }
 
 struct Main {
@@ -59,6 +65,8 @@ struct Main {
 }
 
 struct RequestNewRender;
+#[derive(Clone, Copy)]
+struct Stop;
 
 impl paddle::Frame for Main {
     type State = ();
@@ -138,6 +146,14 @@ impl Main {
         self.outstanding_jobs = self.outstanding_jobs.saturating_sub(1);
     }
 
+    /// paddle event listener
+    pub fn stop(&mut self, _state: &mut (), _msg: &crate::Stop) {
+        self.imgs.drain(self.old_images..);
+        self.old_images = 0;
+        self.next_quality = self.next_quality.saturating_sub(1);
+        self.outstanding_jobs = 0;
+    }
+
     fn new_full_screen_job(quality: u32) -> Option<RenderTask> {
         let mut resolution = 1.0;
         let samples;
@@ -186,5 +202,40 @@ impl Main {
             recursion,
         };
         Some(RenderTask::new(screen, settings))
+    }
+}
+
+struct Button {
+    area: Rectangle,
+    color: Color,
+    trigger: Box<dyn Fn()>,
+    text: std::cell::RefCell<FloatingText>,
+}
+
+impl Button {
+    fn new<T: 'static + Clone>(area: Rectangle, color: Color, msg: T, text: String) -> Self {
+        let mut text = FloatingText::new(&Rectangle::default(), text).unwrap();
+        text.update_fit_strategy(FitStrategy::Center).unwrap();
+        Self {
+            area,
+            color,
+            trigger: Box::new(move || paddle::share(msg.clone())),
+            text: std::cell::RefCell::new(text),
+        }
+    }
+
+    fn draw(&self, canvas: &mut DisplayArea) {
+        canvas.draw(&self.area, &self.color);
+        self.text
+            .borrow_mut()
+            .update_position(&canvas.frame_to_display_area(self.area), 0)
+            .unwrap();
+        self.text.borrow_mut().draw();
+    }
+
+    fn click(&self, pos: Vector) {
+        if pos.overlaps(&self.area) {
+            (self.trigger)()
+        }
     }
 }

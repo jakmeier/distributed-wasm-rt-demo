@@ -24,6 +24,8 @@ pub(crate) struct WorkerResult {
 pub(crate) struct PngRenderWorker {
     current_job: Option<RenderTask>,
     ready: bool,
+    /// Marks an in-flight job while rendering was stopped. Reset when job finishes.
+    interrupted: bool,
     ctx: Box<dyn TaskRenderer>,
     displayable: Box<dyn paddle::DisplayPaint>,
     start: chrono::NaiveDateTime,
@@ -101,6 +103,7 @@ impl PngRenderWorker {
             start: paddle::utc_now(),
             displayable: Box::new(color),
             prev_time: RefCell::new(text),
+            interrupted: false,
         }
     }
 
@@ -142,8 +145,20 @@ impl PngRenderWorker {
     }
 
     pub fn clear(&mut self) {
-        self.clear_task();
-        self.prev_time.get_mut().update_text("...");
+        if !self.interrupted {
+            self.clear_task();
+            self.prev_time.get_mut().update_text("...");
+        }
+    }
+
+    pub fn interrupt(&mut self) {
+        if self.current_job.is_some() {
+            self.interrupted = true;
+        }
+    }
+
+    pub fn clear_interrupt(&mut self) -> bool {
+        std::mem::take(&mut self.interrupted)
     }
 
     /// Display self in the specified area.

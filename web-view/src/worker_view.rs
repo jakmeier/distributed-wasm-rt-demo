@@ -1,10 +1,10 @@
-use paddle::quicksilver_compat::{Color, Shape};
+use paddle::quicksilver_compat::Color;
 use paddle::{Frame, PointerEventType, Rectangle};
 
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
 use crate::worker::{self, PngRenderWorker, WorkerReady, WorkerResult};
-use crate::{progress, PngPart, SCREEN_W};
+use crate::{progress, Button, PngPart, SCREEN_W};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 
@@ -27,11 +27,13 @@ impl WorkerView {
                     Rectangle::new((10, 10), (50, 50)),
                     worker::LOCAL_WORKER_COL,
                     AddWorker { remote: false },
+                    "local".to_owned(),
                 ),
                 Button::new(
                     Rectangle::new((10, 65), (50, 50)),
                     worker::REMOTE_WORKER_COL,
                     AddWorker { remote: true },
+                    "remote".to_owned(),
                 ),
             ],
             workers: vec![],
@@ -49,9 +51,7 @@ impl Frame for WorkerView {
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
         if let PointerEventType::PrimaryClick = event.event_type() {
             for button in &self.buttons {
-                if event.pos().overlaps(&button.area) {
-                    (button.trigger)()
-                }
+                button.click(event.pos());
             }
         }
     }
@@ -65,7 +65,7 @@ impl Frame for WorkerView {
         canvas.draw(&Self::area(), &BACKGROUND);
 
         for button in &self.buttons {
-            canvas.draw(&button.area, &button.color)
+            button.draw(canvas);
         }
 
         for (i, worker) in self.workers.iter().enumerate() {
@@ -114,6 +114,11 @@ impl WorkerView {
 
     /// paddle event listener
     pub fn job_done(&mut self, _state: &mut (), WorkerResult { worker_id, img }: WorkerResult) {
+        if self.workers[worker_id].clear_interrupt() {
+            self.workers[worker_id].set_ready(true);
+            self.workers[worker_id].clear();
+            return;
+        }
         let (job, duration) = self.workers[worker_id]
             .clear_task()
             .expect("result must belong to a job");
@@ -129,20 +134,10 @@ impl WorkerView {
 
         self.workers[worker_id].set_ready(true);
     }
-}
 
-struct Button {
-    area: Rectangle,
-    color: Color,
-    trigger: Box<dyn Fn()>,
-}
-
-impl Button {
-    fn new<T: 'static + Clone>(area: Rectangle, color: Color, msg: T) -> Self {
-        Self {
-            area,
-            color,
-            trigger: Box::new(move || paddle::share(msg.clone())),
-        }
+    /// paddle event listener
+    pub fn stop(&mut self, _state: &mut (), _msg: &crate::Stop) {
+        self.job_pool.clear();
+        self.workers.iter_mut().for_each(PngRenderWorker::interrupt);
     }
 }
