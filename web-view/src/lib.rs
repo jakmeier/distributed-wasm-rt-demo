@@ -9,8 +9,8 @@ mod render;
 mod worker;
 mod worker_view;
 
-const SCREEN_W: u32 = 1080;
-const SCREEN_H: u32 = 1080;
+const SCREEN_W: u32 = 1620;
+const SCREEN_H: u32 = 1620;
 
 #[wasm_bindgen]
 pub fn start() {
@@ -29,12 +29,15 @@ pub fn start() {
     main_handle.register_receiver(&Main::new_png_part);
     main_handle.register_receiver(&Main::ping_next_job);
 
-    let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, 740));
+    let lower_y = Main::HEIGHT + 5;
+    let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, lower_y));
     progress_handle.register_receiver(&RenderProgress::progress_reset);
     progress_handle.register_receiver(&RenderProgress::progress_update);
 
-    let worker_handle =
-        paddle::register_frame_no_state(WorkerView::new(), (40 + RenderProgress::WIDTH + 5, 740));
+    let worker_handle = paddle::register_frame_no_state(
+        WorkerView::new(),
+        (40 + RenderProgress::WIDTH + 5, lower_y),
+    );
     worker_handle.register_receiver(&WorkerView::worker_ready);
     worker_handle.register_receiver(&WorkerView::new_jobs);
     worker_handle.register_receiver(&WorkerView::job_done);
@@ -60,7 +63,7 @@ struct RequestNewRender;
 impl paddle::Frame for Main {
     type State = ();
     const WIDTH: u32 = SCREEN_W;
-    const HEIGHT: u32 = 720;
+    const HEIGHT: u32 = SCREEN_H * 2 / 3;
 
     fn draw(&mut self, _state: &mut Self::State, canvas: &mut DisplayArea, _timestamp: f64) {
         canvas.fit_display(5.0);
@@ -105,18 +108,20 @@ impl Main {
                 self.imgs.drain(..self.old_images);
             }
             let num_new_jobs = match self.next_quality {
-                0..=2 => 64,
-                3..=4 => 256,
-                _ => 512,
+                0..=2 => 32,
+                3 => 128,
+                4 => 256,
+                5 => 512,
+                _ => 1024,
             };
 
             self.old_images = self.imgs.len();
-            self.outstanding_jobs = num_new_jobs;
             if let Some(job) = Self::new_full_screen_job(self.next_quality) {
                 let jobs = job.divide(num_new_jobs as u32);
+                self.outstanding_jobs = jobs.len();
                 paddle::send::<_, WorkerView>(jobs);
                 paddle::send::<_, RenderProgress>(ProgressReset {
-                    work_items: num_new_jobs,
+                    work_items: self.outstanding_jobs,
                 });
                 self.next_quality += 1;
             }
@@ -134,42 +139,52 @@ impl Main {
     }
 
     fn new_full_screen_job(quality: u32) -> Option<RenderTask> {
-        let screen = Rectangle::new_sized((Main::WIDTH, Main::HEIGHT));
-        let mut settings = RenderSettings {
-            resolution: (screen.width() as u32, screen.height() as u32),
-            samples: 512,
-            recursion: 200,
-        };
+        let mut resolution = 1.0;
+        let samples;
+        let recursion;
         match quality {
             0 => {
-                settings.resolution.0 = settings.resolution.0 / 4;
-                settings.resolution.1 = settings.resolution.1 / 4;
-                settings.samples = 1;
-                settings.recursion = 2;
+                resolution = 0.25;
+                samples = 1;
+                recursion = 2;
             }
             1 => {
-                settings.resolution.0 = settings.resolution.0 / 2;
-                settings.resolution.1 = settings.resolution.1 / 2;
-                settings.samples = 1;
-                settings.recursion = 4;
+                resolution = 0.5;
+                samples = 1;
+                recursion = 4;
             }
             2 => {
-                settings.samples = 4;
-                settings.recursion = 4;
+                samples = 4;
+                recursion = 4;
             }
             3 => {
-                settings.samples = 4;
-                settings.recursion = 100;
+                samples = 4;
+                recursion = 100;
             }
             4 => {
-                settings.samples = 64;
-                settings.recursion = 100;
+                samples = 64;
+                recursion = 100;
             }
             5 => {
-                // return max settings
+                samples = 256;
+                recursion = 200;
+            }
+            6 => {
+                // very slightly better bright spot reflection
+                samples = 1024;
+                recursion = 512;
             }
             _more => return None,
         }
+        let screen = Rectangle::new_sized((Main::WIDTH, Main::HEIGHT));
+        let settings = RenderSettings {
+            resolution: (
+                (resolution * screen.width()) as u32,
+                (resolution * screen.height()) as u32,
+            ),
+            samples,
+            recursion,
+        };
         Some(RenderTask::new(screen, settings))
     }
 }

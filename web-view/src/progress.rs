@@ -1,6 +1,8 @@
 use paddle::quicksilver_compat::{Circle, Color, Shape};
 use paddle::{FloatingText, Frame, PointerEventType, Rectangle, Transform};
 
+use crate::SCREEN_H;
+
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 const EMPTY: Color = Color::new(0.0, 0.0, 0.1);
 const FULL: Color = Color::new(0.4, 0.4, 0.7);
@@ -23,8 +25,8 @@ pub struct ProgressReset {
 impl Frame for RenderProgress {
     type State = ();
 
-    const WIDTH: u32 = 410;
-    const HEIGHT: u32 = 320;
+    const WIDTH: u32 = 620;
+    const HEIGHT: u32 = SCREEN_H - crate::Main::HEIGHT - 5;
 
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
         if let PointerEventType::PrimaryClick = event.event_type() {

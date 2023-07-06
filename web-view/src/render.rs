@@ -27,10 +27,10 @@ impl RenderTask {
         let rx = self.settings.resolution.0 as f32 / Main::WIDTH as f32;
         let ry = self.settings.resolution.1 as f32 / Main::HEIGHT as f32;
         api::RenderJob::new(
-            (self.screen_area.x() * rx) as u32,
-            (self.screen_area.y() * ry) as u32,
-            (self.screen_area.width() * rx) as u32,
-            (self.screen_area.height() * ry) as u32,
+            (self.screen_area.x() * rx).round() as u32,
+            (self.screen_area.y() * ry).round() as u32,
+            (self.screen_area.width() * rx).round() as u32,
+            (self.screen_area.height() * ry).round() as u32,
             self.settings.resolution.0,
             self.settings.resolution.1,
             self.settings.samples,
@@ -54,11 +54,11 @@ impl RenderTask {
             for col in 0..num_columns {
                 let x = col as f32 * task_width;
                 let y = row as f32 * task_height;
-                let width = task_width.min(width - x);
-                let height = task_height.min(height - y);
+                let w = task_width.min(width - x);
+                let h = task_height.min(height - y);
 
                 tasks.push(RenderTask {
-                    screen_area: Rectangle::new((x, y), (width, height)),
+                    screen_area: Rectangle::new((x, y), (w, h)),
                     settings: self.settings.clone(),
                 });
             }

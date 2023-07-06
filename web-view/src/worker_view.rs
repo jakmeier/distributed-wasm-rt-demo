@@ -1,9 +1,10 @@
 use paddle::quicksilver_compat::{Color, Shape};
 use paddle::{Frame, PointerEventType, Rectangle};
 
+use crate::progress::RenderProgress;
 use crate::render::RenderTask;
 use crate::worker::{self, PngRenderWorker, WorkerReady, WorkerResult};
-use crate::{progress, PngPart};
+use crate::{progress, PngPart, SCREEN_W};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 
@@ -42,8 +43,8 @@ impl WorkerView {
 impl Frame for WorkerView {
     type State = ();
 
-    const WIDTH: u32 = 665;
-    const HEIGHT: u32 = 320;
+    const WIDTH: u32 = SCREEN_W - RenderProgress::WIDTH - 5;
+    const HEIGHT: u32 = RenderProgress::HEIGHT;
 
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
         if let PointerEventType::PrimaryClick = event.event_type() {
@@ -68,8 +69,8 @@ impl Frame for WorkerView {
         }
 
         for (i, worker) in self.workers.iter().enumerate() {
-            let x = i % 3;
-            let y = i / 3;
+            let x = i / 5;
+            let y = i % 5;
             let area = Rectangle::new((65 + x * 100, 5 + y * 100), (100, 100)).padded(3.0);
             worker.draw(canvas, area);
         }
@@ -108,6 +109,7 @@ impl WorkerView {
     /// paddle event listener
     pub fn new_jobs(&mut self, _state: &mut (), job_pool: Vec<RenderTask>) {
         self.job_pool = job_pool;
+        self.workers.iter_mut().for_each(PngRenderWorker::clear);
     }
 
     /// paddle event listener

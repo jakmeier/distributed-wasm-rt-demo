@@ -18,12 +18,13 @@ pub fn main() {
         .map(|s| s.parse::<usize>().expect("invalid value"))
         .unwrap_or(50);
 
-    // let scene = clumsy_rt::sample_scenes::build_simple_scene();
-    let scene = clumsy_rt::sample_scenes::build_cool_scene();
-    let camera = Camera::new(n_samples, n_recursion);
-
     let w = 4 * size_scalar;
     let h = 3 * size_scalar;
+
+    // let scene = clumsy_rt::sample_scenes::build_simple_scene();
+    let scene = clumsy_rt::sample_scenes::build_cool_scene();
+    let camera = Camera::new(n_samples, n_recursion, w, h);
+
     let mut img = PixelPlane::new(w, h);
 
     println!("{}x{}", w, h);
@@ -59,11 +60,11 @@ fn produce_test_img() -> std::io::Result<()> {
 #[test]
 fn smoke_test() -> std::io::Result<()> {
     let scene = clumsy_rt::sample_scenes::build_cool_scene();
-    let camera = Camera::new(4, 4);
 
     let size_scalar = 16;
     let w = 4 * size_scalar;
     let h = 3 * size_scalar;
+    let camera = Camera::new(4, 4, w, h);
     let mut img = PixelPlane::new(w, h);
 
     camera.render(scene.clone(), &mut img, 1);

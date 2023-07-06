@@ -5,13 +5,21 @@ use thiserror::Error;
 
 #[derive(Debug)]
 pub struct RenderJob {
+    /// Start x of job output in camera coordinates.
     pub x: u32,
+    /// Start y of job output in camera coordinates.
     pub y: u32,
+    /// Width of job output in camera coordinates.
     pub w: u32,
+    /// Height of job output in camera coordinates.
     pub h: u32,
+    /// Width of entire view of all jobs, in camera coordinates.
     pub camera_w: u32,
+    /// Height of entire view of all jobs, in camera coordinates.
     pub camera_h: u32,
+    /// How many rays to cast per output pixel.
     pub n_samples: u32,
+    /// How many times to bounce each ray.
     pub n_recursion: u32,
 }
 

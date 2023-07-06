@@ -141,6 +141,11 @@ impl PngRenderWorker {
             .update_text(&format!("{:#.1?}", duration));
     }
 
+    pub fn clear(&mut self) {
+        self.clear_task();
+        self.prev_time.get_mut().update_text("...");
+    }
+
     /// Display self in the specified area.
     pub fn draw(&self, canvas: &mut paddle::DisplayArea, area: Rectangle) {
         if self.current_job.is_some() {
