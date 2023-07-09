@@ -1,7 +1,7 @@
 use paddle::quicksilver_compat::{Circle, Color, Shape};
-use paddle::{FloatingText, Frame, PointerEventType, Rectangle, Transform};
+use paddle::{FloatingText, Frame, PointerEventType, Rectangle, Transform, UiElement};
 
-use crate::{Button, SCREEN_H};
+use crate::SCREEN_H;
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 const EMPTY: Color = Color::new(0.0, 0.0, 0.1);
@@ -16,7 +16,7 @@ pub struct RenderProgress {
     start: chrono::NaiveDateTime,
     sub_text: Vec<FloatingText>,
 
-    stop_button: Button,
+    stop_button: UiElement,
 }
 
 pub struct ProgressMade {
@@ -41,8 +41,8 @@ impl Frame for RenderProgress {
             if event.pos().overlaps(&hitbox) {
                 paddle::send::<_, crate::Main>(crate::RequestNewRender);
             }
-            self.stop_button.click(event.pos());
         }
+        self.stop_button.pointer(event);
     }
 
     fn draw(
@@ -146,7 +146,7 @@ impl RenderProgress {
             start: Default::default(),
             sub_text,
             total_time: Default::default(),
-            stop_button: Button::new(
+            stop_button: crate::button(
                 Rectangle::new((10, Self::HEIGHT - 110), (Self::WIDTH - 20, 100)),
                 Color::RED,
                 crate::Stop,

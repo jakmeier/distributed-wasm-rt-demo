@@ -1,4 +1,4 @@
-use paddle::quicksilver_compat::{Color, Shape};
+use paddle::quicksilver_compat::Color;
 use paddle::*;
 use progress::{ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
@@ -24,8 +24,13 @@ pub fn start() {
 
     // Initialize framework state and connect to browser window
     paddle::init(config).expect("Paddle initialization failed.");
-    let state = Main::init();
 
+    let mut loader = AssetBundle::new();
+    let fermyon_img = ImageDesc::from_path("assets/fermyon.png");
+    loader.add_images(&[fermyon_img]);
+    loader.load();
+
+    let state = Main::init();
     let main_handle = paddle::register_frame(state, (), (40, 0));
     main_handle.register_receiver(&Main::new_png_part);
     main_handle.register_receiver(&Main::ping_next_job);
@@ -38,7 +43,7 @@ pub fn start() {
     progress_handle.listen(&RenderProgress::stop);
 
     let worker_handle = paddle::register_frame_no_state(
-        WorkerView::new(),
+        WorkerView::new(fermyon_img),
         (40 + RenderProgress::WIDTH + 5, lower_y),
     );
     worker_handle.register_receiver(&WorkerView::worker_ready);
@@ -47,7 +52,10 @@ pub fn start() {
     worker_handle.listen(&WorkerView::add_worker);
     worker_handle.listen(&WorkerView::stop);
 
-    paddle::share(worker_view::AddWorker { remote: false });
+    paddle::share(worker_view::AddWorker::InBrowser);
+    paddle::share(worker_view::AddWorker::InBrowser);
+    paddle::share(worker_view::AddWorker::InBrowser);
+    paddle::share(worker_view::AddWorker::InBrowser);
 }
 
 struct Main {
@@ -205,37 +213,12 @@ impl Main {
     }
 }
 
-struct Button {
-    area: Rectangle,
-    color: Color,
-    trigger: Box<dyn Fn()>,
-    text: std::cell::RefCell<FloatingText>,
-}
-
-impl Button {
-    fn new<T: 'static + Clone>(area: Rectangle, color: Color, msg: T, text: String) -> Self {
-        let mut text = FloatingText::new(&Rectangle::default(), text).unwrap();
-        text.update_fit_strategy(FitStrategy::Center).unwrap();
-        Self {
-            area,
-            color,
-            trigger: Box::new(move || paddle::share(msg.clone())),
-            text: std::cell::RefCell::new(text),
-        }
-    }
-
-    fn draw(&self, canvas: &mut DisplayArea) {
-        canvas.draw(&self.area, &self.color);
-        self.text
-            .borrow_mut()
-            .update_position(&canvas.frame_to_display_area(self.area), 0)
-            .unwrap();
-        self.text.borrow_mut().draw();
-    }
-
-    fn click(&self, pos: Vector) {
-        if pos.overlaps(&self.area) {
-            (self.trigger)()
-        }
-    }
+fn button<T: 'static + Clone>(area: Rectangle, color: Color, msg: T, text: String) -> UiElement {
+    UiElement::new(area, color)
+        .with_rounded_corners(25.0)
+        .with_text(text)
+        .unwrap()
+        .with_text_alignment(FitStrategy::Center)
+        .unwrap()
+        .with_pointer_interaction(PointerEventType::PrimaryClick, msg)
 }

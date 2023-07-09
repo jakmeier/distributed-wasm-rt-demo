@@ -83,15 +83,15 @@ impl RemoteWorkerContext {
 }
 
 impl PngRenderWorker {
-    pub fn new(worker_id: usize, remote_url: Option<String>) -> Self {
-        let color;
-        let ctx: Box<dyn TaskRenderer>;
-        if let Some(url) = remote_url {
-            ctx = Box::new(RemoteWorkerContext::new(url, worker_id));
-            color = REMOTE_WORKER_COL;
+    pub fn new(
+        worker_id: usize,
+        remote_url: Option<String>,
+        displayable: Box<dyn paddle::DisplayPaint>,
+    ) -> Self {
+        let ctx: Box<dyn TaskRenderer> = if let Some(url) = remote_url {
+            Box::new(RemoteWorkerContext::new(url, worker_id))
         } else {
-            ctx = Box::new(LocalWorkerContext::new(worker_id));
-            color = LOCAL_WORKER_COL;
+            Box::new(LocalWorkerContext::new(worker_id))
         };
         let mut text = FloatingText::new(&Rectangle::default(), String::default()).unwrap();
         text.update_fit_strategy(paddle::FitStrategy::Center)
@@ -101,7 +101,7 @@ impl PngRenderWorker {
             ready: false,
             ctx,
             start: paddle::utc_now(),
-            displayable: Box::new(color),
+            displayable,
             prev_time: RefCell::new(text),
             interrupted: false,
         }

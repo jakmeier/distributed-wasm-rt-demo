@@ -1,43 +1,56 @@
 use paddle::quicksilver_compat::Color;
-use paddle::{Frame, PointerEventType, Rectangle};
+use paddle::{Frame, ImageDesc, Rectangle, UiElement};
 
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
-use crate::worker::{self, PngRenderWorker, WorkerReady, WorkerResult};
-use crate::{progress, Button, PngPart, SCREEN_W};
+use crate::worker::{
+    self, PngRenderWorker, WorkerReady, WorkerResult, LOCAL_WORKER_COL, REMOTE_WORKER_COL,
+};
+use crate::{button, progress, PngPart, SCREEN_W};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 
 pub(crate) struct WorkerView {
-    buttons: Vec<Button>,
+    buttons: Vec<UiElement>,
     workers: Vec<PngRenderWorker>,
     job_pool: Vec<RenderTask>,
+    fermyon_img: ImageDesc,
 }
 
 #[derive(Clone, Copy)]
-pub struct AddWorker {
-    pub remote: bool,
+pub enum AddWorker {
+    InBrowser,
+    Localhost,
+    Fermyon,
+    // TODO: Any URL
 }
 
 impl WorkerView {
-    pub fn new() -> Self {
+    pub fn new(fermyon_img: ImageDesc) -> Self {
         Self {
             buttons: vec![
-                Button::new(
+                button(
                     Rectangle::new((10, 10), (50, 50)),
                     worker::LOCAL_WORKER_COL,
-                    AddWorker { remote: false },
+                    AddWorker::InBrowser,
                     "local".to_owned(),
                 ),
-                Button::new(
+                button(
                     Rectangle::new((10, 65), (50, 50)),
                     worker::REMOTE_WORKER_COL,
-                    AddWorker { remote: true },
+                    AddWorker::Localhost,
                     "remote".to_owned(),
+                ),
+                button(
+                    Rectangle::new((10, 120), (50, 50)),
+                    Color::from_rgba(100, 100, 100, 1.0),
+                    AddWorker::Fermyon,
+                    "fermyon".to_owned(),
                 ),
             ],
             workers: vec![],
             job_pool: vec![],
+            fermyon_img,
         }
     }
 }
@@ -49,10 +62,8 @@ impl Frame for WorkerView {
     const HEIGHT: u32 = RenderProgress::HEIGHT;
 
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
-        if let PointerEventType::PrimaryClick = event.event_type() {
-            for button in &self.buttons {
-                button.click(event.pos());
-            }
+        for button in &self.buttons {
+            button.pointer(event);
         }
     }
 
@@ -90,14 +101,28 @@ impl Frame for WorkerView {
 impl WorkerView {
     /// paddle event listener
     pub fn add_worker(&mut self, _state: &mut (), msg: &AddWorker) {
-        if msg.remote {
-            self.workers.push(PngRenderWorker::new(
-                self.workers.len(),
-                Some("http://127.0.0.1:3000".to_owned()),
-            ));
-        } else {
-            self.workers
-                .push(PngRenderWorker::new(self.workers.len(), None));
+        match msg {
+            AddWorker::InBrowser => {
+                self.workers.push(PngRenderWorker::new(
+                    self.workers.len(),
+                    None,
+                    Box::new(LOCAL_WORKER_COL),
+                ));
+            }
+            AddWorker::Localhost => {
+                self.workers.push(PngRenderWorker::new(
+                    self.workers.len(),
+                    Some("http://127.0.0.1:3000".to_owned()),
+                    Box::new(REMOTE_WORKER_COL),
+                ));
+            }
+            AddWorker::Fermyon => {
+                self.workers.push(PngRenderWorker::new(
+                    self.workers.len(),
+                    Some("http://jakmeier-clumsy-rt-demo.fermyon.app".to_owned()),
+                    Box::new(self.fermyon_img),
+                ));
+            }
         }
     }
 

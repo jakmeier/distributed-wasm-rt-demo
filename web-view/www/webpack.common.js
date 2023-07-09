@@ -19,7 +19,7 @@ module.exports = {
     plugins: [
         new CopyWebpackPlugin({
             patterns: [
-                // { from: 'assets/*.svg' },
+                { from: 'assets/*' },
                 { from: 'index.html' },
                 { from: 'worker.js' },
                 { from: 'clumsy_rt.js' },
