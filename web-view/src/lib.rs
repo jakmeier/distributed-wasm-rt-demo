@@ -1,15 +1,20 @@
+use bottom_tabs::Tabs;
+use network::NetworkView;
 use paddle::quicksilver_compat::Color;
 use paddle::*;
 use progress::{ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::wasm_bindgen;
-use worker_view::WorkerView;
+use workers_view::WorkerView;
 
+mod bottom_tabs;
+mod network;
 mod progress;
 mod render;
 mod webrtc_signaling;
 mod worker;
-mod worker_view;
+mod worker_node;
+mod workers_view;
 mod ws;
 
 const SCREEN_W: u32 = 1620;
@@ -20,7 +25,7 @@ pub fn start() {
     // Build configuration object to define all setting
     let config = PaddleConfig::default()
         .with_canvas_id("paddle-canvas-id")
-        .with_resolution((SCREEN_W, SCREEN_H))
+        .with_resolution((SCREEN_W, SCREEN_H + 150))
         .with_text_board(Rectangle::new((100, 100), (500, 500)))
         .with_texture_config(TextureConfig::default().without_filter());
 
@@ -54,13 +59,18 @@ pub fn start() {
     worker_handle.listen(&WorkerView::add_worker);
     worker_handle.listen(&WorkerView::stop);
 
-    paddle::share(worker_view::AddWorker::InBrowser);
-    paddle::share(worker_view::AddWorker::InBrowser);
-    paddle::share(worker_view::AddWorker::InBrowser);
-    paddle::share(worker_view::AddWorker::InBrowser);
+    let network_handle = NetworkView::init();
+    let _tabs_handle = Tabs::init(
+        main_handle, 
+        progress_handle, 
+        worker_handle, 
+        network_handle,
+    );
 
-    // TODO: better code structure
-    webrtc_signaling::PeerConnection::start();
+    paddle::share(workers_view::AddWorker::InBrowser);
+    paddle::share(workers_view::AddWorker::InBrowser);
+    paddle::share(workers_view::AddWorker::InBrowser);
+    paddle::share(workers_view::AddWorker::InBrowser);
 }
 
 struct Main {

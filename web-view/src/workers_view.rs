@@ -10,6 +10,7 @@ use crate::{button, progress, PngPart, SCREEN_W};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 
+/// Displays the connected workers and allows adding more workers.
 pub(crate) struct WorkerView {
     buttons: Vec<UiElement>,
     workers: Vec<PngRenderWorker>,
@@ -46,12 +47,6 @@ impl WorkerView {
                     Color::from_rgba(100, 100, 100, 1.0),
                     AddWorker::Fermyon,
                     "fermyon".to_owned(),
-                ),
-                button(
-                    Rectangle::new((10, 175), (50, 50)),
-                    Color::from_rgba(200, 200, 100, 1.0),
-                    crate::webrtc_signaling::SearchWebRtcWorker,
-                    "webrtc".to_owned(),
                 ),
             ],
             workers: vec![],
@@ -100,6 +95,24 @@ impl Frame for WorkerView {
                     worker.accept_task(job);
                 }
             }
+        }
+    }
+
+    fn leave(&mut self, _state: &mut Self::State) {
+        for button in &self.buttons {
+            button.inactive();
+        }
+        for worker in &self.workers {
+            worker.inactive();
+        }
+    }
+
+    fn enter(&mut self, _state: &mut Self::State) {
+        for button in &self.buttons {
+            button.active();
+        }
+        for worker in &self.workers {
+            worker.active();
         }
     }
 }

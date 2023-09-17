@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use js_sys::Reflect;
@@ -12,18 +13,25 @@ use web_sys::{
 
 use crate::ws::{ReadyState, WebSocketWrapper};
 
-#[derive(Clone)]
-pub(crate) struct SearchWebRtcWorker;
+pub(crate) struct SignalingServerConnection {
+    /// WebSocket to signalling server used for RTC connection setup.
+    signaling: WebSocketWrapper,
+
+    /// Browser objects for peer connections and the connection state, used
+    /// while signalling.
+    ///
+    /// Note the difference to `PeerConnection` which is the type used outside
+    /// this module, for interacting with the peer on an "application layer".
+    peers: HashMap<String, (RtcPeerConnection, RemoteState)>,
+
+    /// closure to re-use
+    on_err_add_ice_candidate: Closure<dyn FnMut(JsValue)>,
+}
 
 pub(crate) struct PeerConnection {
-    peer: RtcPeerConnection,
-    signaling: Option<WebSocketWrapper>,
-    remote_state: RemoteState,
-
-    // closures to re-use on callbacks or just to keep them alive
+    // closures to keep alive
     _on_data_channel: Closure<dyn FnMut(RtcDataChannelEvent)>,
-    on_err_add_ice_candidate: Closure<dyn FnMut(JsValue)>,
-    _on_ice: Vec<Closure<dyn FnMut(RtcPeerConnectionIceEvent)>>,
+    _on_ice: Closure<dyn FnMut(RtcPeerConnectionIceEvent)>,
 }
 
 enum RemoteState {
@@ -32,82 +40,37 @@ enum RemoteState {
 }
 
 struct Forward(ntmy::Message);
-struct RemoteConnectedMsg;
+struct RemoteConnectedMsg {
+    id: String,
+}
+struct OpenOfferMsg {
+    id: String,
+    peer: RtcPeerConnection,
+}
 
-impl paddle::Frame for PeerConnection {
+impl paddle::Frame for SignalingServerConnection {
     type State = ();
     const WIDTH: u32 = 100;
     const HEIGHT: u32 = 100;
 }
 
-fn on_message(data_channel: &RtcDataChannel, ev: MessageEvent) {
-    if let Some(message) = ev.data().as_string() {
-        paddle::println!("onmessage: {:?}", message);
-    } else {
-        paddle::println!("non-string message received");
-    }
-}
-fn on_open(data_channel: &RtcDataChannel) {
-    paddle::println!("sending a ping over rtc");
-    data_channel.send_with_str("Ping from pc2.dc!").unwrap();
-}
-
-impl PeerConnection {
+impl SignalingServerConnection {
     pub fn start() {
-        let this = Self::new(on_open, on_message);
-        let handle = paddle::register_frame_no_state(this, (0, 0));
+        let handle = paddle::register_frame_no_state(Self::new(), (0, 0));
         handle.register_receiver(Self::accept_ntmy_msg);
         handle.register_receiver(Self::forward_ntmy_msg);
-        handle.listen(Self::open_offer);
+        handle.register_receiver(Self::open_offer);
         handle.listen(Self::on_remote_connected);
     }
 }
 
-impl PeerConnection {
+impl SignalingServerConnection {
     const DATA_CHANNEL_NAME: &str = "my-data-channel";
 
-    fn new(on_open: fn(&RtcDataChannel), on_msg: fn(&RtcDataChannel, MessageEvent)) -> Self {
-        let rtc_config = Self::rtc_config().unwrap();
-        let peer = RtcPeerConnection::new_with_configuration(&rtc_config).unwrap();
-        let data_channel = peer.create_data_channel(Self::DATA_CHANNEL_NAME);
-        // Set up callbacks to the channel
-        init_data_channel(data_channel, on_msg, on_open);
-
-        // When the remote peer adds a data channel, set up callbacks, too
-        let on_data_channel = Closure::<dyn FnMut(_)>::new(move |ev: RtcDataChannelEvent| {
-            paddle::println!("data channel opened by remote");
-            init_data_channel(ev.channel(), on_msg, on_open);
-        });
-        peer.set_ondatachannel(Some(on_data_channel.as_ref().unchecked_ref()));
-
+    fn new() -> Self {
         let on_err_add_ice_candidate = Closure::new(move |err| {
             paddle::println!("Adding RtcPeerCandidate produced an error {err:?}.");
         });
-
-        Self {
-            peer,
-            signaling: None,
-            remote_state: RemoteState::WaitingForResponse { buffered: vec![] },
-            _on_data_channel: on_data_channel,
-            on_err_add_ice_candidate,
-            _on_ice: vec![],
-        }
-    }
-
-    fn rtc_config() -> Result<RtcConfiguration, JsValue> {
-        let mut config = RtcConfiguration::new();
-        let servers = js_sys::JSON::parse(r#"[{"urls": "stun:stun.l.google.com:19302"}]"#)?;
-        config.ice_servers(&servers);
-        Ok(config)
-    }
-
-    fn open_offer(&mut self, _state: &mut (), _msg: &SearchWebRtcWorker) {
-        let id = "hello".to_owned();
-        let peer = self.peer.clone();
-
-        let on_ice = ice_candidate_trickling_callback(id.clone());
-        peer.set_onicecandidate(Some(on_ice.as_ref().unchecked_ref()));
-        self._on_ice.push(on_ice);
 
         // TODO: Don't use static local URL.
         // TODO: Also, can we do it with wss?
@@ -118,7 +81,7 @@ impl PeerConnection {
                 let vec = js_sys::Uint8Array::new(&abuf).to_vec();
                 let ntmy_msg = bendy::serde::from_bytes::<ntmy::Message>(&vec)
                     .expect("unparsable ntmy message");
-                paddle::send::<_, PeerConnection>(ntmy_msg);
+                paddle::send::<_, SignalingServerConnection>(ntmy_msg);
             } else if let Ok(_blob) = e.data().dyn_into::<web_sys::Blob>() {
                 paddle::println!("unexpectedly received blob");
             } else if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
@@ -129,8 +92,60 @@ impl PeerConnection {
         }));
 
         let signaling = WebSocketWrapper::new(url, onmessage);
-        self.signaling = Some(signaling.clone());
-        wasm_bindgen_futures::spawn_local(Self::async_open_offer(peer, signaling, id));
+
+        Self {
+            signaling,
+            on_err_add_ice_candidate,
+            peers: HashMap::new(),
+        }
+    }
+
+    fn rtc_config() -> Result<RtcConfiguration, JsValue> {
+        let mut config = RtcConfiguration::new();
+        let servers = js_sys::JSON::parse(r#"[{"urls": "stun:stun.l.google.com:19302"}]"#)?;
+        config.ice_servers(&servers);
+        Ok(config)
+    }
+
+    pub fn new_connection(
+        id: String,
+        on_open: fn(&RtcDataChannel),
+        on_msg: fn(&RtcDataChannel, MessageEvent),
+    ) -> PeerConnection {
+        let rtc_config = Self::rtc_config().unwrap();
+        let peer = RtcPeerConnection::new_with_configuration(&rtc_config).unwrap();
+        let data_channel = peer.create_data_channel(Self::DATA_CHANNEL_NAME);
+        // Set up callbacks to the channel
+        init_data_channel(data_channel, on_msg, on_open);
+
+        let on_data_channel = Closure::<dyn FnMut(_)>::new(move |ev: RtcDataChannelEvent| {
+            paddle::println!("data channel opened by remote");
+            init_data_channel(ev.channel(), on_msg, on_open);
+        });
+
+        // When the remote peer adds a data channel, set up callbacks, too
+        peer.set_ondatachannel(Some(on_data_channel.as_ref().unchecked_ref()));
+
+        let on_ice = ice_candidate_trickling_callback(id.clone());
+        peer.set_onicecandidate(Some(on_ice.as_ref().unchecked_ref()));
+
+        paddle::send::<_, SignalingServerConnection>(OpenOfferMsg { id, peer });
+
+        PeerConnection {
+            _on_data_channel: on_data_channel,
+            _on_ice: on_ice,
+        }
+    }
+
+    fn open_offer(&mut self, _state: &mut (), OpenOfferMsg { peer, id }: OpenOfferMsg) {
+        self.peers.insert(
+            id.clone(),
+            (
+                peer.clone(),
+                RemoteState::WaitingForResponse { buffered: vec![] },
+            ),
+        );
+        wasm_bindgen_futures::spawn_local(Self::async_open_offer(peer, self.signaling.clone(), id));
     }
 
     async fn async_open_offer(peer: RtcPeerConnection, signaling: WebSocketWrapper, id: String) {
@@ -156,18 +171,20 @@ impl PeerConnection {
     }
 
     fn accept_ntmy_msg(&mut self, _state: &mut (), msg: ntmy::Message) {
+        let id = msg.connection_id();
+        if !self.peers.contains_key(id) {
+            paddle::println!("No peer for id {id}");
+            return;
+        }
+        let (peer, ref mut state) = self.peers.get_mut(id).unwrap();
         match msg {
             ntmy::Message::ConnectionRequest { id, session_info } => {
-                let future = Self::accept_peer_offer(
-                    self.peer.clone(),
-                    id,
-                    session_info,
-                    self.signaling.clone().unwrap(),
-                );
+                let future =
+                    Self::accept_peer_offer(peer.clone(), id, session_info, self.signaling.clone());
                 wasm_bindgen_futures::spawn_local(async { future.await.unwrap() });
             }
             ntmy::Message::PeerResponse { id, session_info } => {
-                let future = Self::accept_peer_answer(self.peer.clone(), session_info);
+                let future = Self::accept_peer_answer(peer.clone(), session_info, id);
                 wasm_bindgen_futures::spawn_local(async { future.await.unwrap() });
             }
             ntmy::Message::IncrementalInfo { id, extra_info } => {
@@ -178,10 +195,10 @@ impl PeerConnection {
                 rtc_init.sdp_m_line_index(Some(info.sdp_m_line_index));
                 rtc_init.sdp_mid(Some(&info.sdp_mid));
                 match RtcIceCandidate::new(&rtc_init) {
-                    Ok(candidate) => match &mut self.remote_state {
+                    Ok(candidate) => match state {
                         RemoteState::WaitingForResponse { buffered } => buffered.push(candidate),
                         RemoteState::Connected => {
-                            self.add_ice_candidate(candidate);
+                            self.add_ice_candidate(candidate, &id);
                         }
                     },
                     Err(err) => {
@@ -196,31 +213,34 @@ impl PeerConnection {
         }
     }
 
-    fn add_ice_candidate(&mut self, candidate: RtcIceCandidate) {
-        let _promise = self
-            .peer
-            .add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate))
-            .catch(&self.on_err_add_ice_candidate);
-    }
-
-    fn forward_ntmy_msg(&mut self, _state: &mut (), Forward(msg): Forward) {
-        if let Some(ws) = self.signaling.as_mut() {
-            if let Err(e) = ws.send(&bendy::serde::to_bytes(&msg).unwrap()) {
-                paddle::println!("Failed to send NTMY message over web socket. {e:?}");
-            }
+    fn add_ice_candidate(&mut self, candidate: RtcIceCandidate, id: &str) {
+        if let Some((peer, _state)) = self.peers.get(id) {
+            let _promise = peer
+                .add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate))
+                .catch(&self.on_err_add_ice_candidate);
         } else {
-            paddle::println!("no signaling peer to send message to");
+            paddle::println!("No stored connection for id {id}");
         }
     }
 
-    fn on_remote_connected(&mut self, _state: &mut (), _msg: &RemoteConnectedMsg) {
-        match std::mem::replace(&mut self.remote_state, RemoteState::Connected) {
-            RemoteState::WaitingForResponse { buffered } => {
-                for candidate in buffered {
-                    self.add_ice_candidate(candidate)
+    fn forward_ntmy_msg(&mut self, _state: &mut (), Forward(msg): Forward) {
+        if let Err(e) = self.signaling.send(&bendy::serde::to_bytes(&msg).unwrap()) {
+            paddle::println!("Failed to send NTMY message over web socket. {e:?}");
+        }
+    }
+
+    fn on_remote_connected(&mut self, _state: &mut (), msg: &RemoteConnectedMsg) {
+        if let Some((_peer, ref mut state)) = self.peers.get_mut(&msg.id) {
+            match std::mem::replace(state, RemoteState::Connected) {
+                RemoteState::WaitingForResponse { buffered } => {
+                    for candidate in buffered {
+                        self.add_ice_candidate(candidate, &msg.id)
+                    }
                 }
+                RemoteState::Connected => {}
             }
-            RemoteState::Connected => {}
+        } else {
+            paddle::println!("No stored connection for id {}", msg.id);
         }
     }
 
@@ -235,7 +255,7 @@ impl PeerConnection {
         offer_obj.sdp(&offer_sdp);
         let srd_promise = peer.set_remote_description(&offer_obj);
         JsFuture::from(srd_promise).await?;
-        paddle::share(RemoteConnectedMsg);
+        paddle::share(RemoteConnectedMsg { id: id.clone() });
 
         let answer = JsFuture::from(peer.create_answer()).await?;
         let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))?
@@ -258,13 +278,14 @@ impl PeerConnection {
     async fn accept_peer_answer(
         peer: RtcPeerConnection,
         session_info: Vec<u8>,
+        id: String,
     ) -> Result<(), JsValue> {
         let answer_sdp = std::str::from_utf8(&session_info).unwrap();
         let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
         answer_obj.sdp(answer_sdp);
         let srd_promise = peer.set_remote_description(&answer_obj);
         JsFuture::from(srd_promise).await?;
-        paddle::send::<_, PeerConnection>(RemoteConnectedMsg);
+        paddle::send::<_, SignalingServerConnection>(RemoteConnectedMsg { id });
         Ok(())
     }
 }
@@ -300,7 +321,7 @@ fn ice_candidate_trickling_callback(id: String) -> Closure<dyn FnMut(RtcPeerConn
                 id: id.clone(),
                 extra_info: bendy::serde::to_bytes(&info).unwrap(),
             };
-            paddle::send::<_, PeerConnection>(Forward(ntmy_msg));
+            paddle::send::<_, SignalingServerConnection>(Forward(ntmy_msg));
         }
     })
 }
@@ -323,7 +344,7 @@ fn init_data_channel(
 }
 
 // TODO: Dropping should be handled properly
-impl Drop for PeerConnection {
+impl Drop for SignalingServerConnection {
     fn drop(&mut self) {
         // The handlers owned by this object are still registered, if they get
         // called it will cause panics. Also, same problem is inherited from the

@@ -117,6 +117,19 @@ impl Frame for RenderProgress {
 
         self.stop_button.draw(canvas);
     }
+
+    fn leave(&mut self, _state: &mut Self::State) {
+        self.bar_text.hide().unwrap();
+        for text in &self.sub_text {
+            text.hide().unwrap();
+        }
+        self.stop_button.inactive();
+    }
+
+    fn enter(&mut self, _state: &mut Self::State) {
+        self.bar_text.show().unwrap();
+        self.stop_button.active();
+    }
 }
 
 impl RenderProgress {

@@ -7,8 +7,7 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-paddle = {rev = "d23a61891b1062b04cf4949020c007897837a7ed", git = "https://github.com/jakmeier/paddle.git"}
-nuts = "*"
+paddle = {rev = "b8f396488edabce2713095e4ea6640e21be29a5b", git = "https://github.com/jakmeier/paddle.git"}
 
 ntmy = {path = "../ntmy"}
 
@@ -24,6 +23,7 @@ api = {path = "../api"}
 features = [
   "console",
   "BinaryType",
+  "Crypto",
   "Document",
   "ErrorEvent",
   "MessageEvent",
