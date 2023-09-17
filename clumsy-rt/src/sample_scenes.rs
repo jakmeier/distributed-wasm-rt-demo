@@ -63,7 +63,7 @@ pub fn build_cool_scene() -> Scene {
     let smaller = VIEWPORT_WIDTH / 4.0;
     for ring_level in 0..4 {
         let r = center_sphere_radius + 1.0 + 1.25 * ring_level as f32;
-        let y = center_h + - ring_level as f32 * 1.25;
+        let y = center_h + -ring_level as f32 * 1.25;
         for alpha in 0..8 {
             let alpha = std::f32::consts::FRAC_PI_4 * (alpha as f32 + 0.5);
             let x = r * alpha.cos();

@@ -47,6 +47,12 @@ impl WorkerView {
                     AddWorker::Fermyon,
                     "fermyon".to_owned(),
                 ),
+                button(
+                    Rectangle::new((10, 175), (50, 50)),
+                    Color::from_rgba(200, 200, 100, 1.0),
+                    crate::webrtc_signaling::SearchWebRtcWorker,
+                    "webrtc".to_owned(),
+                ),
             ],
             workers: vec![],
             job_pool: vec![],

@@ -8,7 +8,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 paddle = {rev = "d23a61891b1062b04cf4949020c007897837a7ed", git = "https://github.com/jakmeier/paddle.git"}
+nuts = "*"
 
+ntmy = {path = "../ntmy"}
+
+bendy = {version = "0.3.3", features = ["std", "serde"]}
 chrono = "*"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
@@ -19,8 +23,24 @@ api = {path = "../api"}
 [dependencies.web-sys]
 features = [
   "console",
+  "BinaryType",
   "Document",
+  "ErrorEvent",
   "MessageEvent",
+  "RtcConfiguration",
+  "RtcDataChannel",
+  "RtcDataChannelEvent",
+  "RtcIceCandidate",
+  "RtcIceGatheringState",
+  "RtcPeerConnection",
+  "RtcPeerConnectionIceEvent",
+  "RtcSdpType",
+  "RtcSessionDescriptionInit",
+  "RtcSignalingState",
+  "RtcIceCandidateInit",
+  "RtcIceConnectionState",
+  "RtcConfiguration",
+  "WebSocket",
   "Window",
   "Worker",
 ]

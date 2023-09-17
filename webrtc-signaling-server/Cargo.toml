@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+name = "webrtc-signaling-server"
+version = "0.1.0"
+
+[dependencies]
+axum = {version = "0.6", features = ["ws"]}
+chashmap = "2.2"
+futures-util = "0.3"
+tokio = {version = "1", features = ["full"]}
+env_logger = "0.10.0"
+log = "0.4.0"
+bendy = {version = "0.3.3", features = ["std", "serde"]}
+
+ntmy = {path = "../ntmy"}

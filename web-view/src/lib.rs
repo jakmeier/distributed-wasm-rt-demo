@@ -7,8 +7,10 @@ use worker_view::WorkerView;
 
 mod progress;
 mod render;
+mod webrtc_signaling;
 mod worker;
 mod worker_view;
+mod ws;
 
 const SCREEN_W: u32 = 1620;
 const SCREEN_H: u32 = 1620;
@@ -56,6 +58,9 @@ pub fn start() {
     paddle::share(worker_view::AddWorker::InBrowser);
     paddle::share(worker_view::AddWorker::InBrowser);
     paddle::share(worker_view::AddWorker::InBrowser);
+
+    // TODO: better code structure
+    webrtc_signaling::PeerConnection::start();
 }
 
 struct Main {

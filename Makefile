@@ -11,3 +11,5 @@ debug:
 start:
 	cd web-view/www; npm run start
 
+start-signaling-server:
+	cd webrtc-signaling-server; RUST_LOG=debug cargo run
