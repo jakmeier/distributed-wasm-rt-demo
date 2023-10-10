@@ -21,6 +21,8 @@ pub(crate) struct NetworkView {
     peer_ui: Vec<UiElement>,
 }
 
+pub(crate) struct NewPeerMsg;
+
 #[derive(Clone)]
 struct NewPeerConnectionMsg;
 
@@ -88,15 +90,10 @@ impl NetworkView {
     pub(crate) fn new_png_part(&mut self, _state: &mut (), png: &crate::PngPart) {
         let msg = crate::p2p_proto::Message::RenderedPart(png.clone());
         let num_pixels = png.screen_area.width() as usize * png.screen_area.height() as usize;
-        let future = async move {
-            // Best effort pre-allocation: One byte per pixel, which is most likely
-            // too much due to PNG compression. Hence it should avoid re-allocation
-            // in most cases.
-            let mut buf = Vec::with_capacity(num_pixels);
-            msg.serialize(&mut buf).await.expect("serialization failed");
-            paddle::send::<_, Self>(BroadcastMsg(buf));
-        };
-        wasm_bindgen_futures::spawn_local(future);
+        // Best effort pre-allocation: One byte per pixel, which is most likely
+        // too much due to PNG compression. Hence it should avoid re-allocation
+        // in most cases.
+        broadcast_async(msg, Some(num_pixels));
     }
 
     /// Send a message to all peers.
@@ -175,6 +172,23 @@ fn on_message(_data_channel: &RtcDataChannel, ev: MessageEvent) {
 fn on_open(data_channel: &RtcDataChannel) {
     paddle::println!("sending a ping over rtc");
     data_channel.send_with_str("Ping from pc2.dc!").unwrap();
+    paddle::share(NewPeerMsg);
+}
+
+/// Send a message to all connected peers.
+pub(crate) fn broadcast_async(msg: crate::p2p_proto::Message, size_hint: Option<usize>) {
+    let future = async move {
+        let mut buf = if let Some(size) = size_hint {
+            Vec::with_capacity(size)
+        } else {
+            Vec::new()
+        };
+        msg.serialize(&mut buf)
+            .await
+            .expect("failed to serialize message");
+        paddle::send::<_, NetworkView>(BroadcastMsg(buf));
+    };
+    wasm_bindgen_futures::spawn_local(future);
 }
 
 fn generate_key() -> String {

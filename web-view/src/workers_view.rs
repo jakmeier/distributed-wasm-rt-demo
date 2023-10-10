@@ -1,12 +1,14 @@
 use paddle::quicksilver_compat::Color;
 use paddle::{Frame, ImageDesc, Rectangle, UiElement};
 
+use crate::p2p_proto::JobBody;
+use crate::peer_proxy::PeerProxy;
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
 use crate::worker::{
     self, PngRenderWorker, WorkerReady, WorkerResult, LOCAL_WORKER_COL, REMOTE_WORKER_COL,
 };
-use crate::{button, progress, PngPart, SCREEN_W};
+use crate::{button, network, p2p_proto, progress, PngPart, SCREEN_W};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
 
@@ -16,6 +18,7 @@ pub(crate) struct WorkerView {
     workers: Vec<PngRenderWorker>,
     job_pool: Vec<RenderTask>,
     fermyon_img: ImageDesc,
+    peers: PeerProxy,
 }
 
 #[derive(Clone, Copy)]
@@ -52,6 +55,7 @@ impl WorkerView {
             workers: vec![],
             job_pool: vec![],
             fermyon_img,
+            peers: Default::default(),
         }
     }
 }
@@ -89,6 +93,9 @@ impl Frame for WorkerView {
     }
 
     fn update(&mut self, _state: &mut Self::State) {
+        if self.job_pool.is_empty() {
+            self.peers.steal_work(self.workers.len());
+        }
         for worker in &mut self.workers {
             if worker.ready() && worker.current_task().is_none() {
                 if let Some(job) = self.job_pool.pop() {
@@ -183,5 +190,30 @@ impl WorkerView {
     pub fn stop(&mut self, _state: &mut (), _msg: &crate::Stop) {
         self.job_pool.clear();
         self.workers.iter_mut().for_each(PngRenderWorker::interrupt);
+    }
+
+    /// paddle event listener
+    pub fn peer_message(&mut self, _state: &mut (), msg: &p2p_proto::Message) {
+        match msg {
+            p2p_proto::Message::StealWork(body) => {
+                // respond with 0 to N jobs
+                let take_after = self.job_pool.len().saturating_sub(body.num_jobs as usize);
+                let jobs: Vec<_> = self.job_pool.drain(take_after..).collect();
+                let response = p2p_proto::Message::Job(JobBody { jobs });
+                let size_guess = 1 + body.num_jobs as usize * 4 * 8;
+                // TODO: send response to requesting peer only! Broadcast leads to work multiplication.
+                network::broadcast_async(response, Some(size_guess));
+            }
+            p2p_proto::Message::Job(msg) => {
+                self.job_pool.extend_from_slice(&msg.jobs);
+            }
+            p2p_proto::Message::RenderedPart(_) => (),
+        }
+        self.peers.peer_message(msg);
+    }
+
+    /// paddle event listener
+    pub(crate) fn new_peer(&mut self, _state: &mut (), msg: &network::NewPeerMsg) {
+        self.peers.new_peer(msg);
     }
 }

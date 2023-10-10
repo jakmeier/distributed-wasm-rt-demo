@@ -12,7 +12,7 @@ paddle = {rev = "65f0daada4b70ef4650aa1c113380594fea81299", git = "https://githu
 ntmy = {path = "../ntmy"}
 
 bendy = {version = "0.3.3", features = ["std", "serde"]}
-chrono = "*"
+chrono = "0.4.30"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

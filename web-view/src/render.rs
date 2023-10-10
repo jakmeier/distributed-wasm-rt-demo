@@ -1,8 +1,8 @@
-use paddle::{Frame, Rectangle};
+use paddle::{Frame, Rectangle, Vector};
 
 use crate::Main;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RenderTask {
     pub screen_area: paddle::Rectangle,
     settings: RenderSettings,
@@ -65,5 +65,23 @@ impl RenderTask {
         }
 
         tasks
+    }
+}
+
+impl From<api::RenderJob> for RenderTask {
+    fn from(job: api::RenderJob) -> Self {
+        let settings = RenderSettings {
+            resolution: (job.camera_w, job.camera_h),
+            samples: job.n_samples,
+            recursion: job.n_recursion,
+        };
+        let rx = Main::WIDTH as f32 / settings.resolution.0 as f32;
+        let ry = Main::HEIGHT as f32 / settings.resolution.1 as f32;
+        let pos = Vector::new((job.x as f32 * rx).round(), (job.y as f32 * ry).round());
+        let size = Vector::new((job.w as f32 * rx).round(), (job.h as f32 * ry).round());
+        RenderTask {
+            screen_area: Rectangle::new(pos, size),
+            settings,
+        }
     }
 }

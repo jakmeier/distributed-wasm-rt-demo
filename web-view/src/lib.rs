@@ -14,6 +14,7 @@ use workers_view::WorkerView;
 mod bottom_tabs;
 mod network;
 mod p2p_proto;
+mod peer_proxy;
 mod progress;
 mod render;
 mod webrtc_signaling;
@@ -64,6 +65,8 @@ pub fn start() {
     worker_handle.register_receiver(&WorkerView::job_done);
     worker_handle.listen(&WorkerView::add_worker);
     worker_handle.listen(&WorkerView::stop);
+    worker_handle.listen(&WorkerView::peer_message);
+    worker_handle.listen(&WorkerView::new_peer);
 
     let network_handle = NetworkView::init();
     network_handle.listen(&NetworkView::new_png_part);
@@ -240,6 +243,7 @@ impl Main {
     pub fn peer_message(&mut self, state: &mut (), msg: &p2p_proto::Message) {
         match msg {
             p2p_proto::Message::RenderedPart(part) => self.new_png_part(state, part),
+            _ => {}
         }
     }
 }
