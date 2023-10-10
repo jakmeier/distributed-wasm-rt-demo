@@ -1,4 +1,8 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use bottom_tabs::Tabs;
+use js_sys::Uint8Array;
 use network::NetworkView;
 use paddle::quicksilver_compat::Color;
 use paddle::*;
@@ -9,6 +13,7 @@ use workers_view::WorkerView;
 
 mod bottom_tabs;
 mod network;
+mod p2p_proto;
 mod progress;
 mod render;
 mod webrtc_signaling;
@@ -39,8 +44,9 @@ pub fn start() {
 
     let state = Main::init();
     let main_handle = paddle::register_frame(state, (), (40, 0));
-    main_handle.register_receiver(&Main::new_png_part);
     main_handle.register_receiver(&Main::ping_next_job);
+    main_handle.listen(&Main::new_png_part);
+    main_handle.listen(&Main::peer_message);
     main_handle.listen(&Main::stop);
 
     let lower_y = Main::HEIGHT + 5;
@@ -60,12 +66,8 @@ pub fn start() {
     worker_handle.listen(&WorkerView::stop);
 
     let network_handle = NetworkView::init();
-    let _tabs_handle = Tabs::init(
-        main_handle, 
-        progress_handle, 
-        worker_handle, 
-        network_handle,
-    );
+    network_handle.listen(&NetworkView::new_png_part);
+    let _tabs_handle = Tabs::init(main_handle, progress_handle, worker_handle, network_handle);
 
     paddle::share(workers_view::AddWorker::InBrowser);
     paddle::share(workers_view::AddWorker::InBrowser);
@@ -79,7 +81,7 @@ struct Main {
 
     /// Stack of all images rendered, drawn in the order they were added and
     /// potentially covering older images.
-    imgs: Vec<(ImageDesc, Rectangle)>,
+    imgs: Vec<PngPart>,
 
     /// number of jobs currently waiting to be done
     outstanding_jobs: usize,
@@ -98,8 +100,8 @@ impl paddle::Frame for Main {
 
     fn draw(&mut self, _state: &mut Self::State, canvas: &mut DisplayArea, _timestamp: f64) {
         canvas.fit_display(5.0);
-        for (img, area) in &self.imgs {
-            canvas.draw(area, img);
+        for part in &self.imgs {
+            canvas.draw(&part.screen_area, &part.img.img);
         }
     }
 
@@ -115,9 +117,16 @@ impl paddle::Frame for Main {
     }
 }
 
+#[derive(Clone)]
 struct PngPart {
-    img: ImageDesc,
     screen_area: Rectangle,
+    img: ImageData,
+}
+
+#[derive(Clone)]
+struct ImageData {
+    img: ImageDesc,
+    data: Rc<RefCell<Option<Vec<u8>>>>,
 }
 
 impl Main {
@@ -160,12 +169,12 @@ impl Main {
     }
 
     /// paddle event listener
-    fn new_png_part(&mut self, _state: &mut (), msg: PngPart) {
+    fn new_png_part(&mut self, _state: &mut (), png: &PngPart) {
         let mut bundle = AssetBundle::new();
-        bundle.add_images(&[msg.img]);
+        bundle.add_images(&[png.img.img]);
         bundle.load();
 
-        self.imgs.push((msg.img, msg.screen_area));
+        self.imgs.push(png.clone());
         self.outstanding_jobs = self.outstanding_jobs.saturating_sub(1);
     }
 
@@ -225,6 +234,32 @@ impl Main {
             recursion,
         };
         Some(RenderTask::new(screen, settings))
+    }
+
+    /// paddle event listener
+    pub fn peer_message(&mut self, state: &mut (), msg: &p2p_proto::Message) {
+        match msg {
+            p2p_proto::Message::RenderedPart(part) => self.new_png_part(state, part),
+        }
+    }
+}
+
+impl ImageData {
+    fn new_from_array(data: Uint8Array) -> Self {
+        let vec = data.to_vec();
+        Self {
+            // TODO: Avoid memory leak (in paddle itself!)
+            img: ImageDesc::from_png_binary(&vec).unwrap(),
+            data: Rc::new(Some(vec).into()),
+        }
+    }
+
+    // TODO: avoid memory leaks
+    fn new_leaky(path: String) -> Self {
+        Self {
+            img: ImageDesc::from_path(Box::leak(path.into_boxed_str())),
+            data: Rc::new(None.into()),
+        }
     }
 }
 

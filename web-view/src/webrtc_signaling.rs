@@ -29,6 +29,7 @@ pub(crate) struct SignalingServerConnection {
 }
 
 pub(crate) struct PeerConnection {
+    channel: RtcDataChannel,
     // closures to keep alive
     _on_data_channel: Closure<dyn FnMut(RtcDataChannelEvent)>,
     _on_ice: Closure<dyn FnMut(RtcPeerConnectionIceEvent)>,
@@ -116,7 +117,7 @@ impl SignalingServerConnection {
         let peer = RtcPeerConnection::new_with_configuration(&rtc_config).unwrap();
         let data_channel = peer.create_data_channel(Self::DATA_CHANNEL_NAME);
         // Set up callbacks to the channel
-        init_data_channel(data_channel, on_msg, on_open);
+        init_data_channel(data_channel.clone(), on_msg, on_open);
 
         let on_data_channel = Closure::<dyn FnMut(_)>::new(move |ev: RtcDataChannelEvent| {
             paddle::println!("data channel opened by remote");
@@ -132,6 +133,7 @@ impl SignalingServerConnection {
         paddle::send::<_, SignalingServerConnection>(OpenOfferMsg { id, peer });
 
         PeerConnection {
+            channel: data_channel,
             _on_data_channel: on_data_channel,
             _on_ice: on_ice,
         }
@@ -331,6 +333,7 @@ fn init_data_channel(
     on_msg: fn(&RtcDataChannel, MessageEvent),
     on_open: fn(&RtcDataChannel),
 ) {
+    data_channel.set_binary_type(web_sys::RtcDataChannelType::Blob);
     let data_channel_clone = data_channel.clone();
     let onmessage =
         Closure::<dyn FnMut(_)>::new(move |ev: MessageEvent| on_msg(&data_channel_clone, ev));
@@ -341,6 +344,12 @@ fn init_data_channel(
     let onopen = Closure::<dyn FnMut()>::new(move || on_open(&data_channel_clone));
     data_channel.set_onopen(Some(onopen.as_ref().unchecked_ref()));
     onopen.forget(); // TODO: avoid memory leak
+}
+
+impl PeerConnection {
+    pub(crate) fn send(&self, data: &[u8]) -> Result<(), JsValue> {
+        self.channel.send_with_u8_array(data)
+    }
 }
 
 // TODO: Dropping should be handled properly

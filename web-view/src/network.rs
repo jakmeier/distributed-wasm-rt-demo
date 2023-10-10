@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use paddle::quicksilver_compat::Color;
 use paddle::{Frame, FrameHandle, Rectangle, UiElement};
+use wasm_bindgen::JsCast;
 use web_sys::{Element, HtmlInputElement, MessageEvent, RtcDataChannel};
 
 use crate::webrtc_signaling::{PeerConnection, SignalingServerConnection};
@@ -22,6 +23,9 @@ pub(crate) struct NetworkView {
 
 #[derive(Clone)]
 struct NewPeerConnectionMsg;
+
+/// Send some serialized data to all peers.
+struct BroadcastMsg(Vec<u8>);
 
 impl NetworkView {
     pub(crate) fn init() -> FrameHandle<Self> {
@@ -61,6 +65,7 @@ impl NetworkView {
             .activity()
             .set_status(paddle::nuts::LifecycleStatus::Inactive);
         handle.listen(Self::new_peer_connection);
+        handle.register_receiver(Self::broadcast);
         handle
     }
 
@@ -76,6 +81,28 @@ impl NetworkView {
             let area = Rectangle::new((100, 400 + 110 * i), (Self::WIDTH - 200, 100));
             self.peer_ui
                 .push(UiElement::new(area, PEER_COLOR).with_text(id).unwrap());
+        }
+    }
+
+    /// paddle event listener: forward png parts when they are produced
+    pub(crate) fn new_png_part(&mut self, _state: &mut (), png: &crate::PngPart) {
+        let msg = crate::p2p_proto::Message::RenderedPart(png.clone());
+        let num_pixels = png.screen_area.width() as usize * png.screen_area.height() as usize;
+        let future = async move {
+            // Best effort pre-allocation: One byte per pixel, which is most likely
+            // too much due to PNG compression. Hence it should avoid re-allocation
+            // in most cases.
+            let mut buf = Vec::with_capacity(num_pixels);
+            msg.serialize(&mut buf).await.expect("serialization failed");
+            paddle::send::<_, Self>(BroadcastMsg(buf));
+        };
+        wasm_bindgen_futures::spawn_local(future);
+    }
+
+    /// Send a message to all peers.
+    fn broadcast(&mut self, _state: &mut (), BroadcastMsg(data): BroadcastMsg) {
+        for (_id, peer) in &self.peers {
+            peer.send(&data).unwrap();
         }
     }
 }
@@ -114,7 +141,7 @@ impl Frame for NetworkView {
             peer.active();
         }
     }
-    
+
     fn leave(&mut self, _state: &mut Self::State) {
         self.button.inactive();
         for peer in &self.peer_ui {
@@ -123,14 +150,28 @@ impl Frame for NetworkView {
     }
 }
 
-fn on_message(data_channel: &RtcDataChannel, ev: MessageEvent) {
+/// Entry point for new messages arriving through the WebRTC channel.
+fn on_message(_data_channel: &RtcDataChannel, ev: MessageEvent) {
     if let Some(message) = ev.data().as_string() {
+        // strings can be used for debugging
         paddle::println!("onmessage: {:?}", message);
+    } else if let Some(blob) = ev.data().dyn_into::<web_sys::Blob>().ok() {
+        let future = async {
+            match crate::p2p_proto::Message::from_blob(blob).await {
+                Ok(msg) => paddle::share(msg),
+                Err(e) => paddle::println!("failed to parse received message: {e:?}"),
+            }
+        };
+        wasm_bindgen_futures::spawn_local(future);
     } else {
-        paddle::println!("non-string message received");
+        paddle::println!(
+            "unexpected message type received: {}",
+            ev.data().js_typeof().as_string().unwrap()
+        );
     }
 }
 
+/// Entry point for new WebRTC connections opening.
 fn on_open(data_channel: &RtcDataChannel) {
     paddle::println!("sending a ping over rtc");
     data_channel.send_with_str("Ping from pc2.dc!").unwrap();

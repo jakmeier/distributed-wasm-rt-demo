@@ -7,7 +7,7 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-paddle = {rev = "b8f396488edabce2713095e4ea6640e21be29a5b", git = "https://github.com/jakmeier/paddle.git"}
+paddle = {rev = "65f0daada4b70ef4650aa1c113380594fea81299", git = "https://github.com/jakmeier/paddle.git"}
 
 ntmy = {path = "../ntmy"}
 
@@ -16,6 +16,7 @@ chrono = "*"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+serde = {version = "1", features = ["derive"]}
 
 api = {path = "../api"}
 
@@ -23,12 +24,14 @@ api = {path = "../api"}
 features = [
   "console",
   "BinaryType",
+  "CanvasRenderingContext2d",
   "Crypto",
   "Document",
   "ErrorEvent",
   "MessageEvent",
   "RtcConfiguration",
   "RtcDataChannel",
+  "RtcDataChannelType",
   "RtcDataChannelEvent",
   "RtcIceCandidate",
   "RtcIceGatheringState",

@@ -1,6 +1,6 @@
 use js_sys::Uint32Array;
 use paddle::quicksilver_compat::Color;
-use paddle::{FloatingText, ImageDesc, Rectangle, Transform};
+use paddle::{FloatingText, Rectangle, Transform};
 use std::cell::RefCell;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -8,6 +8,7 @@ use web_sys::MessageEvent;
 
 use crate::render::RenderTask;
 use crate::workers_view::WorkerView;
+use crate::ImageData;
 
 pub(crate) const LOCAL_WORKER_COL: Color = Color::new(0.5, 0.1, 0.2);
 pub(crate) const REMOTE_WORKER_COL: Color = Color::new(0.1, 0.1, 0.6);
@@ -18,7 +19,7 @@ pub(crate) struct WorkerReady(pub usize);
 /// Worker has completed as task
 pub(crate) struct WorkerResult {
     pub worker_id: usize,
-    pub img: ImageDesc,
+    pub img: ImageData,
 }
 
 pub(crate) struct PngRenderWorker {
@@ -64,14 +65,10 @@ impl TaskRenderer for RemoteWorkerContext {
     fn submit(&self, task: &RenderTask) {
         let full_url = format!("{}/{}", self.url, task.marshal());
         let worker_id = self.worker_id;
-        let future = async move {
-            let binary = paddle::load_file(&full_url).await.unwrap();
-            paddle::send::<_, WorkerView>(WorkerResult {
-                img: ImageDesc::from_png_binary(&binary).unwrap(),
-                worker_id,
-            });
-        };
-        wasm_bindgen_futures::spawn_local(future);
+        paddle::send::<_, WorkerView>(WorkerResult {
+            img: ImageData::new_leaky(full_url),
+            worker_id,
+        });
     }
 }
 
@@ -189,13 +186,8 @@ impl LocalWorkerContext {
 
         let rx = move |evt: MessageEvent| {
             if let Ok(array) = evt.data().dyn_into::<js_sys::Uint8Array>() {
-                let array = js_sys::Array::from(&array);
-                let raw: Vec<u8> = (0..array.length())
-                    .map(|i| array.get(i).as_f64().unwrap_or(0.0) as u8)
-                    .collect();
-
                 paddle::send::<_, WorkerView>(WorkerResult {
-                    img: ImageDesc::from_png_binary(&raw).unwrap(),
+                    img: ImageData::new_from_array(array),
                     worker_id,
                 });
             } else if let Some(s) = evt.data().as_string() {

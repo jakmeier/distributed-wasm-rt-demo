@@ -185,7 +185,7 @@ impl SessionBroker {
                     debug!("received DONE for `{id}` but role was not known");
                     return Err(axum::Error::new("DONE before ConnectionRequest"));
                 };
-                if let Some(mut session) = role_sessions.get_mut(&id) {
+                if let Some(mut _session) = role_sessions.get_mut(&id) {
                     debug!("should be hanging up for `{id}`");
                     // TODO: delete state in stored sessions?
                     // TODO: also terminate other end of connection

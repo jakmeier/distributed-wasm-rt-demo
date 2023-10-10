@@ -1011,7 +1011,7 @@ dependencies = [
 [[package]]
 name = "paddle"
 version = "0.1.0-beta.1"
-source = "git+https://github.com/jakmeier/paddle.git?rev=b8f396488edabce2713095e4ea6640e21be29a5b#b8f396488edabce2713095e4ea6640e21be29a5b"
+source = "git+https://github.com/jakmeier/paddle.git?rev=65f0daada4b70ef4650aa1c113380594fea81299#65f0daada4b70ef4650aa1c113380594fea81299"
 dependencies = [
  "chrono",
  "console_error_panic_hook",
@@ -2014,6 +2014,7 @@ dependencies = [
  "js-sys",
  "ntmy",
  "paddle",
+ "serde",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

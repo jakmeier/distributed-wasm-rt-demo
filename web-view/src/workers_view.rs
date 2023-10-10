@@ -166,7 +166,7 @@ impl WorkerView {
         let (job, duration) = self.workers[worker_id]
             .clear_task()
             .expect("result must belong to a job");
-        paddle::send::<_, crate::Main>(PngPart {
+        paddle::share(PngPart {
             img,
             screen_area: job.screen_area,
         });
