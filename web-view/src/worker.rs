@@ -63,12 +63,18 @@ impl TaskRenderer for LocalWorkerContext {
 
 impl TaskRenderer for RemoteWorkerContext {
     fn submit(&self, task: &RenderTask) {
+        // Reading from this URL causes work on the remote, so let's not use it
+        // directly. Instead, download the data and build a local url object.
         let full_url = format!("{}/{}", self.url, task.marshal());
         let worker_id = self.worker_id;
-        paddle::send::<_, WorkerView>(WorkerResult {
-            img: ImageData::new_leaky(full_url),
-            worker_id,
-        });
+        let future = async move {
+            let binary = paddle::load_file(&full_url).await.unwrap();
+            paddle::send::<_, WorkerView>(WorkerResult {
+                img: ImageData::new_from_vec(binary),
+                worker_id,
+            });
+        };
+        wasm_bindgen_futures::spawn_local(future);
     }
 }
 

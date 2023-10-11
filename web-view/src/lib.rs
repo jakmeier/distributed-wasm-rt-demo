@@ -251,6 +251,10 @@ impl Main {
 impl ImageData {
     fn new_from_array(data: Uint8Array) -> Self {
         let vec = data.to_vec();
+        Self::new_from_vec(vec)
+    }
+
+    fn new_from_vec(vec: Vec<u8>) -> Self {
         Self {
             // TODO: Avoid memory leak (in paddle itself!)
             img: ImageDesc::from_png_binary(&vec).unwrap(),
