@@ -38,7 +38,7 @@ impl PeerProxy {
     }
 
     /// indirect paddle event listener
-    pub(crate) fn new_peer(&mut self, _msg: &network::NewPeerMsg) {
+    pub(crate) fn new_peer(&mut self, _msg: &network::NewPeerEstablishedConnectionMsg) {
         // TODO: This is done to trigger sending requests to the new peer. This
         // kind of just works for a single peer. But I really should be tracking
         // each peer connection in-flight status separately.

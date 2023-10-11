@@ -110,18 +110,31 @@ impl SignalingServerConnection {
 
     pub fn new_connection(
         id: String,
-        on_open: fn(&RtcDataChannel),
-        on_msg: fn(&RtcDataChannel, MessageEvent),
+        on_open: fn(&RtcDataChannel, &str),
+        on_msg: fn(&RtcDataChannel, &str, MessageEvent),
     ) -> PeerConnection {
         let rtc_config = Self::rtc_config().unwrap();
         let peer = RtcPeerConnection::new_with_configuration(&rtc_config).unwrap();
         let data_channel = peer.create_data_channel(Self::DATA_CHANNEL_NAME);
+        let id0 = id.clone();
+        let id1 = id.clone();
         // Set up callbacks to the channel
-        init_data_channel(data_channel.clone(), on_msg, on_open);
+        init_data_channel(
+            data_channel.clone(),
+            move |c, msg| on_msg(c, &id0, msg),
+            move |c| on_open(c, &id1),
+        );
 
+        let id2 = id.clone();
         let on_data_channel = Closure::<dyn FnMut(_)>::new(move |ev: RtcDataChannelEvent| {
+            let id3 = id2.clone();
+            let id4 = id2.clone();
             paddle::println!("data channel opened by remote");
-            init_data_channel(ev.channel(), on_msg, on_open);
+            init_data_channel(
+                ev.channel(),
+                move |c, msg| on_msg(c, &id3, msg),
+                move |c| on_open(c, &id4),
+            );
         });
 
         // When the remote peer adds a data channel, set up callbacks, too
@@ -330,8 +343,8 @@ fn ice_candidate_trickling_callback(id: String) -> Closure<dyn FnMut(RtcPeerConn
 
 fn init_data_channel(
     data_channel: RtcDataChannel,
-    on_msg: fn(&RtcDataChannel, MessageEvent),
-    on_open: fn(&RtcDataChannel),
+    mut on_msg: impl FnMut(&RtcDataChannel, MessageEvent) + 'static,
+    mut on_open: impl FnMut(&RtcDataChannel) + 'static,
 ) {
     data_channel.set_binary_type(web_sys::RtcDataChannelType::Blob);
     let data_channel_clone = data_channel.clone();

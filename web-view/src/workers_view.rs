@@ -213,7 +213,7 @@ impl WorkerView {
     }
 
     /// paddle event listener
-    pub(crate) fn new_peer(&mut self, _state: &mut (), msg: &network::NewPeerMsg) {
+    pub(crate) fn new_peer(&mut self, _state: &mut (), msg: &network::NewPeerEstablishedConnectionMsg) {
         self.peers.new_peer(msg);
     }
 }

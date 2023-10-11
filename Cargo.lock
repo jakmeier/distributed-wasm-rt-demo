@@ -1016,7 +1016,7 @@ dependencies = [
 [[package]]
 name = "paddle"
 version = "0.1.0-beta.1"
-source = "git+https://github.com/jakmeier/paddle.git?rev=65f0daada4b70ef4650aa1c113380594fea81299#65f0daada4b70ef4650aa1c113380594fea81299"
+source = "git+https://github.com/jakmeier/paddle.git?rev=e2282668df56706d49c82bab6d7848eb6c51c7d7#e2282668df56706d49c82bab6d7848eb6c51c7d7"
 dependencies = [
  "chrono",
  "console_error_panic_hook",

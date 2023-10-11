@@ -10,6 +10,7 @@ use crate::{SCREEN_H, SCREEN_W};
 
 const BUTTON_COLOR: Color = Color::new(0.5, 0.5, 0.5);
 const PEER_COLOR: Color = Color::new(0.5, 0.5, 1.0);
+const PEER_CONNECTED_COLOR: Color = Color::new(0.5, 0.75, 1.0);
 
 /// Shows connected peers and allows connecting with more.
 pub(crate) struct NetworkView {
@@ -17,14 +18,21 @@ pub(crate) struct NetworkView {
     html: Element,
     new_id_field: HtmlInputElement,
     button: UiElement,
-    peers: HashMap<String, PeerConnection>,
-    peer_ui: Vec<UiElement>,
+    peers: HashMap<String, Peer>,
 }
 
-pub(crate) struct NewPeerMsg;
+/// Network tab representation of a peer
+struct Peer {
+    connection: PeerConnection,
+    ui: UiElement,
+}
 
+/// Event emitted when a peer connection has been established.
+pub(crate) struct NewPeerEstablishedConnectionMsg(String);
+
+/// Request to open a new peer, sent on button click.
 #[derive(Clone)]
-struct NewPeerConnectionMsg;
+struct OpenNewPeerConnectionMsg;
 
 /// Send some serialized data to all peers.
 struct BroadcastMsg(Vec<u8>);
@@ -47,7 +55,10 @@ impl NetworkView {
             Rectangle::new((100, 100), (Self::WIDTH - 200, 200)),
             BUTTON_COLOR,
         )
-        .with_pointer_interaction(paddle::PointerEventType::PrimaryClick, NewPeerConnectionMsg)
+        .with_pointer_interaction(
+            paddle::PointerEventType::PrimaryClick,
+            OpenNewPeerConnectionMsg,
+        )
         .with_rounded_corners(15.0)
         .with_text("Find Peer".to_owned())
         .unwrap()
@@ -60,29 +71,43 @@ impl NetworkView {
             new_id_field,
             button,
             peers: HashMap::new(),
-            peer_ui: vec![],
         };
         let handle = paddle::register_frame_no_state(data, (0, 0));
         handle
             .activity()
             .set_status(paddle::nuts::LifecycleStatus::Inactive);
-        handle.listen(Self::new_peer_connection);
+        handle.listen(Self::request_new_connection);
+        handle.listen(Self::connected);
         handle.register_receiver(Self::broadcast);
         handle
     }
 
-    fn new_peer_connection(&mut self, _state: &mut (), _msg: &NewPeerConnectionMsg) {
+    fn request_new_connection(&mut self, _state: &mut (), _msg: &OpenNewPeerConnectionMsg) {
         let id = self.new_id_field.value();
         if self.peers.contains_key(&id) {
-            paddle::TextBoard::display_error_message("Already has peer.".to_owned()).unwrap();
+            paddle::TextBoard::display_error_message(format!(
+                "Already has peer with id {id}, please use a different id."
+            ))
+            .unwrap();
         } else {
-            let peer = SignalingServerConnection::new_connection(id.clone(), on_open, on_message);
-            self.peers.insert(id.clone(), peer);
-
-            let i = self.peer_ui.len();
+            let connection =
+                SignalingServerConnection::new_connection(id.clone(), on_open, on_message);
+            let i = self.peers.len();
             let area = Rectangle::new((100, 400 + 110 * i), (Self::WIDTH - 200, 100));
-            self.peer_ui
-                .push(UiElement::new(area, PEER_COLOR).with_text(id).unwrap());
+            let ui = UiElement::new(area, PEER_COLOR)
+                .with_text(id.clone())
+                .unwrap();
+            self.peers.insert(id, Peer { connection, ui });
+        }
+    }
+
+    /// paddle event listener
+    pub(crate) fn connected(&mut self, _state: &mut (), msg: &NewPeerEstablishedConnectionMsg) {
+        let id = &msg.0;
+        if let Some(peer) = self.peers.get_mut(id) {
+            peer.ui.set_paint(PEER_CONNECTED_COLOR);
+        } else {
+            paddle::println!("got connection for {id} without a stored peer object");
         }
     }
 
@@ -99,7 +124,7 @@ impl NetworkView {
     /// Send a message to all peers.
     fn broadcast(&mut self, _state: &mut (), BroadcastMsg(data): BroadcastMsg) {
         for (_id, peer) in &self.peers {
-            peer.send(&data).unwrap();
+            peer.connection.send(&data).unwrap();
         }
     }
 }
@@ -123,8 +148,8 @@ impl Frame for NetworkView {
         }
         self.button.draw(canvas);
 
-        for peer in &self.peer_ui {
-            peer.draw(canvas);
+        for peer in self.peers.values() {
+            peer.ui.draw(canvas);
         }
     }
 
@@ -134,24 +159,24 @@ impl Frame for NetworkView {
 
     fn enter(&mut self, _state: &mut Self::State) {
         self.button.active();
-        for peer in &self.peer_ui {
-            peer.active();
+        for peer in self.peers.values() {
+            peer.ui.active();
         }
     }
 
     fn leave(&mut self, _state: &mut Self::State) {
         self.button.inactive();
-        for peer in &self.peer_ui {
-            peer.inactive();
+        for peer in self.peers.values() {
+            peer.ui.inactive();
         }
     }
 }
 
 /// Entry point for new messages arriving through the WebRTC channel.
-fn on_message(_data_channel: &RtcDataChannel, ev: MessageEvent) {
+fn on_message(_data_channel: &RtcDataChannel, id: &str, ev: MessageEvent) {
     if let Some(message) = ev.data().as_string() {
         // strings can be used for debugging
-        paddle::println!("onmessage: {:?}", message);
+        paddle::println!("onmessage({id}): {:?}", message);
     } else if let Some(blob) = ev.data().dyn_into::<web_sys::Blob>().ok() {
         let future = async {
             match crate::p2p_proto::Message::from_blob(blob).await {
@@ -169,10 +194,8 @@ fn on_message(_data_channel: &RtcDataChannel, ev: MessageEvent) {
 }
 
 /// Entry point for new WebRTC connections opening.
-fn on_open(data_channel: &RtcDataChannel) {
-    paddle::println!("sending a ping over rtc");
-    data_channel.send_with_str("Ping from pc2.dc!").unwrap();
-    paddle::share(NewPeerMsg);
+fn on_open(_data_channel: &RtcDataChannel, id: &str) {
+    paddle::share(NewPeerEstablishedConnectionMsg(id.to_owned()));
 }
 
 /// Send a message to all connected peers.
