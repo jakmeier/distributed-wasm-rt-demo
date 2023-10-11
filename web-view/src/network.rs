@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use paddle::quicksilver_compat::Color;
-use paddle::{Frame, FrameHandle, Rectangle, UiElement};
+use paddle::{Frame, FrameHandle, Rectangle, TextBoard, UiElement};
 use wasm_bindgen::JsCast;
 use web_sys::{Element, HtmlInputElement, MessageEvent, RtcDataChannel};
 
@@ -83,6 +83,19 @@ impl NetworkView {
     }
 
     fn request_new_connection(&mut self, _state: &mut (), _msg: &OpenNewPeerConnectionMsg) {
+        if self.peers.len() > 0 {
+            // This limitation is necessary because a network of three peers or
+            // more is not handled properly.
+            // Rendered parts (and control messages) would have to be forwarded
+            // to all peers without duplication. This requires some knowledge
+            // about the topology, or some sort of duplication detection. None
+            // of this is super interesting but requires some work.
+            // For the demo, two peers are sufficient to show the necessary
+            // points, so let's avoid the extra work.
+            TextBoard::display_error_message("Only 1 peer supported in this demo.".to_owned())
+                .unwrap();
+            return;
+        }
         let id = self.new_id_field.value();
         if self.peers.contains_key(&id) {
             paddle::TextBoard::display_error_message(format!(
@@ -246,17 +259,17 @@ const ADJECTIVES: [&str; 76] = [
 ];
 
 #[rustfmt::skip]
-const NOUNS: [&str; 84] = [
-    "alpaca", "badger", "beetle", "bottle", "bunny", "butterfly", "cactus", "cheetah", "cherry",
-    "chicken", "chinchilla", "chipmunk", "clouds", "cookie", "corgi", "crystal", "cupcake",
-    "dancer", "diamond", "dolphin", "donkey", "doodle", "dragon", "fairy", "flower", "fluffy",
-    "friend", "gazelle", "giggles", "giraffe", "gopher", "hamster", "hedgehog", "honey",
-    "humming", "igloo", "jaguar", "jelly", "kangaroo", "kitten", "kiwi", "ladybug", "lizard",
+const NOUNS: [&str; 93] = [
+    "alpaca", "badger", "bee", "beetle", "bottle", "bunny", "butterfly", "cat", "cactus", "cheetah",
+    "cherry", "chicken", "chinchilla", "chipmunk", "clouds", "cookie", "corgi", "crystal", "cupcake",
+    "dancer", "diamond", "dog", "dolphin", "donkey", "doodle", "dragon", "fairy", "fish", "flower",
+    "fluffy", "friend", "gazelle", "giggles", "giraffe", "gopher", "hamster", "hedgehog", "honey",
+    "hum", "igloo", "jaguar", "jelly", "kangaroo", "kitten", "kiwi", "ladybug", "lizard",
     "lobster", "lollipop", "magic", "monkey", "muffin", "octopus", "otter", "panda", "pandas",
     "parakeet", "parrot", "pebble", "penguin", "pigeon", "platypus", "poodle", "pumpkin", "puppies",
     "puppy", "rabbit", "raccoon", "rainbow", "robot", "seagull", "seahorse", "skunk", "snail",
-    "sparkle", "squeaky", "squirrel", "starfish", "sunshine", "teddy", "tiger", "turtle", "unicorn",
-    "waffles", "whisker", "wombat", "zebra", "zephyr"
+    "sparkle", "squirrel", "starfish", "sunshine", "teddy", "tiger", "turtle", "unicorn",
+    "waffle", "whisker", "wombat", "year", "yeti", "zebra", "zero", "zombie", "zone", "zoo", "zulu"
 ];
 
 #[rustfmt::skip]
