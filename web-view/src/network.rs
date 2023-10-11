@@ -200,30 +200,53 @@ fn generate_key() -> String {
         .get_random_values_with_u8_array(&mut random_bytes)
         .expect("failed to generate random numbers");
 
-    let n = WORDS.len();
     format!(
         "{}-{}-{}-{}",
-        WORDS[random_bytes[0] as usize % n],
-        WORDS[random_bytes[1] as usize % n],
-        WORDS[random_bytes[2] as usize % n],
+        ADVERBS[random_bytes[0] as usize % ADVERBS.len()],
+        ADJECTIVES[random_bytes[1] as usize % ADJECTIVES.len()],
+        NOUNS[random_bytes[2] as usize % NOUNS.len()],
         random_bytes[3],
     )
 }
 
-// List of 128 child-friendly words (according to ChatGPT)
+// Lists of child-friendly words (according to ChatGPT)
 #[rustfmt::skip]
-const WORDS: [&str; 128] = [
-    "apple", "banana", "candy", "cloud", "dance", "dream", "funny", "giggle", "happy", "jelly",
-    "kitty", "laugh", "magic", "puppy", "quick", "smile", "sunny", "sweet", "teddy", "unicorn",
-    "balloon", "bubble", "bouncy", "cookie", "cuddle", "ducky", "fairy", "fluffy", "hoppy", "jumpy",
-    "lolly", "lucky", "marsh", "melon", "piggy", "poppy", "puddle", "skippy", "spark", "spotty", "sprinkle",
-    "starry", "tickle", "turtle", "wiggly", "bunny", "comet", "cozy", "cuddly", "daisy", "dazzle",
-    "funny", "hopper", "jolly", "kiddy", "lemon", "lucky", "monkey", "noodle", "paws", "pebble",
-    "plump", "puffy", "skippy", "smiley", "snappy", "snuggle", "spotty", "squishy", "stripe", "sunny",
-    "tiny", "twinkle", "whisker", "wiggle", "zippy", "bambo", "blinky", "boing", "boppy", "cherub",
-    "chuckle", "dingle", "doozy", "dumby", "fuzzy", "giggly", "holly", "hooty", "jingle", "kooky",
-    "little", "mellow", "nifty", "peppy", "perky", "pixie", "plinky", "polka", "quirks", "rascal",
-    "skunky", "snappy", "sneezy", "snoopy", "sparky", "spunky", "sunny", "thumpy", "tipsy", "trilly",
-    "twirly", "whimsy", "wiggly", "zappy", "zesty", "zippy", "ziggy", "bitty", "boppy", "cheery", "chicky",
-    "clappy", "cuddle", "curly", "dandy", "doodle", "giggle",
+const ADJECTIVES: [&str; 76] = [
+    "bold", "boppy", "bouncy", "brave", "bright", "cheery", "chicky", "clappy", "colorly", "cozy",
+    "crazy", "cuddly", "curious", "dandy", "daring", "dingle", "dizzy", "dreamy", "easy", "fair",
+    "fancy", "fluffy", "fondly", "frisky", "funny", "fuzzy", "giddy", "giggly", "happy", "honest",
+    "honey", "hoppie", "humming", "jitter", "jolly", "jovial", "jungle", "kind", "kindly",
+    "lively", "lolly", "loud", "low", "lucky", "mellow", "nervous", "noisy", "perky", "playful",
+    "plump", "puffy", "quick", "quiet", "quirky", "shyly", "silly", "smiley", "sneaky", "soft",
+    "sparky", "spunky", "squeaky", "sunny", "swift", "tasty", "vividly", "wacky", "whimsy",
+    "wiggly", "wiggy", "wise", "witty", "wobbly", "zappy", "zesty", "zippy",
+];
+
+#[rustfmt::skip]
+const NOUNS: [&str; 84] = [
+    "alpaca", "badger", "beetle", "bottle", "bunny", "butterfly", "cactus", "cheetah", "cherry",
+    "chicken", "chinchilla", "chipmunk", "clouds", "cookie", "corgi", "crystal", "cupcake",
+    "dancer", "diamond", "dolphin", "donkey", "doodle", "dragon", "fairy", "flower", "fluffy",
+    "friend", "gazelle", "giggles", "giraffe", "gopher", "hamster", "hedgehog", "honey",
+    "humming", "igloo", "jaguar", "jelly", "kangaroo", "kitten", "kiwi", "ladybug", "lizard",
+    "lobster", "lollipop", "magic", "monkey", "muffin", "octopus", "otter", "panda", "pandas",
+    "parakeet", "parrot", "pebble", "penguin", "pigeon", "platypus", "poodle", "pumpkin", "puppies",
+    "puppy", "rabbit", "raccoon", "rainbow", "robot", "seagull", "seahorse", "skunk", "snail",
+    "sparkle", "squeaky", "squirrel", "starfish", "sunshine", "teddy", "tiger", "turtle", "unicorn",
+    "waffles", "whisker", "wombat", "zebra", "zephyr"
+];
+
+#[rustfmt::skip]
+const ADVERBS: [&str; 95] = [
+    "bitter", "boldly", "boppy", "bouncy", "bravely", "bright", "brightly", "bunny", "cheerly",
+    "cheery", "chicky", "chucky", "clappy", "colorly", "cozy", "crazy", "cuddly", "curious",
+    "dandy", "daring", "dearly", "dingle", "dizzy", "dreamy", "easily", "fairly", "fancy",
+    "fluffy", "fondly", "freely", "frisky", "funny", "fuzzy", "gaily", "gently", "giddy", "giga",
+    "giggly", "happily", "happy", "hastily", "honest", "honey", "hoppie", "humming", "jitter",
+    "jolly", "jovial", "jungle", "kindly", "lively", "lolly", "loudly", "lucky", "madly", "mellow",
+    "merrily", "nervous", "noisy", "perky", "playful", "plump", "politely", "puffy", "quickly",
+    "quietly", "quirky", "safely", "sharply", "shyly", "silly", "slowly", "smiley", "snappy",
+    "sneaky", "softly", "sorely", "sparky", "spunky", "squeaky", "sunny", "super", "swiftly",
+    "tasty", "vividly", "wacky", "whimsy", "wiggly", "wiggy", "wisely", "witty", "wobbly", "zappy",
+    "zesty", "zippy",
 ];
