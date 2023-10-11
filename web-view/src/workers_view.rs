@@ -1,7 +1,7 @@
 use paddle::quicksilver_compat::Color;
 use paddle::{Frame, ImageDesc, Rectangle, UiElement};
 
-use crate::p2p_proto::JobBody;
+use crate::p2p_proto::{JobBody, RenderControlBody};
 use crate::peer_proxy::PeerProxy;
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
@@ -178,7 +178,7 @@ impl WorkerView {
             screen_area: job.screen_area,
         });
         self.workers[worker_id].record_time(duration);
-        paddle::send::<_, progress::RenderProgress>(progress::ProgressMade {
+        paddle::send::<_, progress::RenderProgress>(progress::ProgressMade::Domestic {
             worker_id: worker_id,
             time: duration,
         });
@@ -188,6 +188,14 @@ impl WorkerView {
 
     /// paddle event listener
     pub fn stop(&mut self, _state: &mut (), _msg: &crate::Stop) {
+        self.stop_local();
+        network::broadcast_async(
+            p2p_proto::Message::RenderControl(RenderControlBody { num_new_jobs: 0 }),
+            None,
+        )
+    }
+
+    fn stop_local(&mut self) {
         self.job_pool.clear();
         self.workers.iter_mut().for_each(PngRenderWorker::interrupt);
     }
@@ -208,12 +216,21 @@ impl WorkerView {
                 self.job_pool.extend_from_slice(&msg.jobs);
             }
             p2p_proto::Message::RenderedPart(_) => (),
+            p2p_proto::Message::RenderControl(body) => {
+                if body.num_new_jobs == 0 {
+                    self.stop_local();
+                }
+            }
         }
         self.peers.peer_message(msg);
     }
 
     /// paddle event listener
-    pub(crate) fn new_peer(&mut self, _state: &mut (), msg: &network::NewPeerEstablishedConnectionMsg) {
+    pub(crate) fn new_peer(
+        &mut self,
+        _state: &mut (),
+        msg: &network::NewPeerEstablishedConnectionMsg,
+    ) {
         self.peers.new_peer(msg);
     }
 }

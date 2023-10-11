@@ -29,6 +29,7 @@ pub(crate) enum Message {
     RenderedPart(PngPart),
     StealWork(StealWorkBody),
     Job(JobBody),
+    RenderControl(RenderControlBody),
 }
 /// Message header sent between peers over WebRTC data channels.
 ///
@@ -44,6 +45,8 @@ enum MessageHeader {
     StealWork = 2,
     /// Response to `StealWork`, a list of jobs that can be done by the work stealer.
     Job = 3,
+    /// Start or stop rendering.
+    RenderControl = 4,
 }
 
 struct RenderedPartBody {
@@ -60,6 +63,10 @@ pub(crate) struct StealWorkBody {
 
 pub(crate) struct JobBody {
     pub jobs: Vec<RenderTask>,
+}
+
+pub(crate) struct RenderControlBody {
+    pub num_new_jobs: u32,
 }
 
 impl Message {
@@ -92,6 +99,7 @@ impl Message {
             }
             Message::StealWork(body) => body.serialize(w)?,
             Message::Job(body) => body.serialize(w)?,
+            Message::RenderControl(body) => body.serialize(w)?,
         }
         Ok(())
     }
@@ -129,6 +137,12 @@ impl Message {
                 let body = JobBody::deserialize(&body_bytes.to_vec());
                 Ok(Message::Job(body))
             }
+            Some(MessageHeader::RenderControl) => {
+                let body_blob = blob.slice_with_i32(1)?;
+                let body_bytes = blob_to_array(&body_blob).await?;
+                let body = RenderControlBody::deserialize(&body_bytes.to_vec());
+                Ok(Message::RenderControl(body))
+            }
             None => Err(format!(
                 "Unexpected message, starting with byte {} and a total length of {}.",
                 first_byte.get_index(0),
@@ -143,6 +157,7 @@ impl Message {
             Message::RenderedPart(_) => MessageHeader::RenderedPart,
             Message::StealWork(_) => MessageHeader::StealWork,
             Message::Job(_) => MessageHeader::Job,
+            Message::RenderControl(_) => MessageHeader::RenderControl,
         }
     }
 }
@@ -171,6 +186,7 @@ impl TryFrom<u8> for MessageHeader {
             1 => Self::RenderedPart,
             2 => Self::StealWork,
             3 => Self::Job,
+            4 => Self::RenderControl,
             _ => return Err(()),
         };
         assert_eq!(result as u8, value);
@@ -248,5 +264,21 @@ impl JobBody {
             .map(|slice| RenderTask::from(RenderJob::try_from_slice(slice).unwrap()))
             .collect();
         Self { jobs }
+    }
+}
+
+impl RenderControlBody {
+    fn serialize(&self, w: &mut impl Write) -> Result<(), std::io::Error> {
+        w.write(&self.num_new_jobs.to_be_bytes())?;
+        Ok(())
+    }
+
+    fn deserialize(data: &[u8]) -> Self {
+        assert!(
+            data.len() >= 4,
+            "RenderControlBody must be at least 4 bytes"
+        );
+        let num_new_jobs = u32::from_be_bytes(data[0..4].try_into().unwrap());
+        Self { num_new_jobs }
     }
 }

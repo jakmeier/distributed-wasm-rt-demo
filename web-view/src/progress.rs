@@ -19,9 +19,14 @@ pub struct RenderProgress {
     stop_button: UiElement,
 }
 
-pub struct ProgressMade {
-    pub worker_id: usize,
-    pub time: std::time::Duration,
+pub enum ProgressMade {
+    /// Work has been performed by a worker controlled by this instance.
+    Domestic {
+        worker_id: usize,
+        time: std::time::Duration,
+    },
+    /// Work has been performed by a remote peer.
+    Foreign,
 }
 
 pub struct ProgressReset {
@@ -54,7 +59,7 @@ impl Frame for RenderProgress {
         let z = 1;
         canvas.draw(&Self::area(), &BACKGROUND);
 
-        let done = self.total == self.done;
+        let done = self.total <= self.done;
         let progress = if self.total == 0 {
             1.0
         } else {
@@ -176,7 +181,12 @@ impl RenderProgress {
 
     /// paddle event listener
     pub fn progress_update(&mut self, _state: &mut (), msg: ProgressMade) {
-        self.total_time += msg.time;
+        match msg {
+            ProgressMade::Domestic { time, .. } => {
+                self.total_time += time;
+            }
+            ProgressMade::Foreign => (),
+        }
         self.done += 1;
         if self.done == self.total {
             let latency = paddle::utc_now()

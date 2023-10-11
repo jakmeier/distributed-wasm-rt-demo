@@ -4,9 +4,10 @@ use std::rc::Rc;
 use bottom_tabs::Tabs;
 use js_sys::Uint8Array;
 use network::NetworkView;
+use p2p_proto::RenderControlBody;
 use paddle::quicksilver_compat::Color;
 use paddle::*;
-use progress::{ProgressReset, RenderProgress};
+use progress::{ProgressMade, ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::wasm_bindgen;
 use workers_view::WorkerView;
@@ -32,7 +33,7 @@ pub fn start() {
     let config = PaddleConfig::default()
         .with_canvas_id("paddle-canvas-id")
         .with_resolution((SCREEN_W, SCREEN_H + 150))
-        .with_text_board(Rectangle::new((100, 100), (500, 500)))
+        .with_text_board(Rectangle::new((100, 100), (500, 1000)))
         .with_texture_config(TextureConfig::default().without_filter());
 
     // Initialize framework state and connect to browser window
@@ -166,8 +167,16 @@ impl Main {
                 paddle::send::<_, RenderProgress>(ProgressReset {
                     work_items: self.outstanding_jobs,
                 });
+                network::broadcast_async(
+                    p2p_proto::Message::RenderControl(RenderControlBody {
+                        num_new_jobs: self.outstanding_jobs as u32,
+                    }),
+                    None,
+                );
                 self.next_quality += 1;
             }
+        } else {
+            TextBoard::display_error_message("Rendering in progress.".to_owned()).unwrap();
         }
     }
 
@@ -242,7 +251,16 @@ impl Main {
     /// paddle event listener
     pub fn peer_message(&mut self, state: &mut (), msg: &p2p_proto::Message) {
         match msg {
-            p2p_proto::Message::RenderedPart(part) => self.new_png_part(state, part),
+            p2p_proto::Message::RenderedPart(part) => {
+                self.new_png_part(state, part);
+                paddle::send::<_, RenderProgress>(ProgressMade::Foreign);
+            }
+            p2p_proto::Message::RenderControl(body) => {
+                self.outstanding_jobs += body.num_new_jobs as usize;
+                paddle::send::<_, RenderProgress>(ProgressReset {
+                    work_items: self.outstanding_jobs,
+                });
+            }
             _ => {}
         }
     }
