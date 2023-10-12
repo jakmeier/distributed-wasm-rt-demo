@@ -1,11 +1,11 @@
 use paddle::quicksilver_compat::{Circle, Color, Shape};
 use paddle::{FloatingText, Frame, PointerEventType, Rectangle, Transform, UiElement};
 
-use crate::SCREEN_H;
+use crate::{palette, PADDING, SCREEN_H};
 
-const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
-const EMPTY: Color = Color::new(0.0, 0.0, 0.1);
-const FULL: Color = Color::new(0.4, 0.4, 0.7);
+const BACKGROUND: Color = palette::NEUTRAL_DARK;
+const EMPTY: Color = palette::NEUTRAL;
+const FULL: Color = palette::MAIN;
 
 pub struct RenderProgress {
     total: usize,
@@ -37,7 +37,7 @@ impl Frame for RenderProgress {
     type State = ();
 
     const WIDTH: u32 = 620;
-    const HEIGHT: u32 = SCREEN_H - crate::Main::HEIGHT - 5;
+    const HEIGHT: u32 = SCREEN_H - crate::Main::HEIGHT - crate::Tabs::HEIGHT - 2 * PADDING;
 
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
         if let PointerEventType::PrimaryClick = event.event_type() {
@@ -94,7 +94,7 @@ impl Frame for RenderProgress {
         #[allow(unused_assignments)]
         let mut tmp = String::new();
         let msg = if done {
-            "> render <"
+            "Start"
         } else {
             tmp = format!("{:2.0}%", progress * 100.0);
             &tmp
@@ -145,21 +145,33 @@ impl RenderProgress {
         let bar_text = FloatingText::new_styled(
             &Rectangle::default(),
             "".to_owned(),
-            &[("color", "white"), ("font-size", "x-large")],
+            &[("color", palette::CSS_FONT_DARK), ("font-size", "x-large")],
             &[],
         )
         .unwrap();
         fn subtext() -> FloatingText {
-            FloatingText::new_styled(
+            let mut text = FloatingText::new_styled(
                 &Rectangle::default(),
                 "".to_owned(),
-                &[("color", "white"), ("font-size", "large")],
+                &[("color", palette::CSS_FONT_LIGHT), ("font-size", "large")],
                 &[],
             )
-            .unwrap()
+            .unwrap();
+            text.update_fit_strategy(paddle::FitStrategy::Center)
+                .unwrap();
+            text
         }
 
         let sub_text = vec![subtext(), subtext()];
+        let mut stop_button = crate::button(
+            Rectangle::new((10, Self::HEIGHT - 110), (Self::WIDTH - 20, 100)),
+            palette::ACCENT,
+            crate::Stop,
+            "Stop".to_owned(),
+            50.0,
+        );
+        stop_button.add_text_css("color", palette::CSS_FONT_DARK);
+        stop_button.add_text_css("font-size", "x-large");
         Self {
             done: 0,
             total: 0,
@@ -167,12 +179,7 @@ impl RenderProgress {
             start: Default::default(),
             sub_text,
             total_time: Default::default(),
-            stop_button: crate::button(
-                Rectangle::new((10, Self::HEIGHT - 110), (Self::WIDTH - 20, 100)),
-                Color::RED,
-                crate::Stop,
-                "stop".to_owned(),
-            ),
+            stop_button,
         }
     }
 

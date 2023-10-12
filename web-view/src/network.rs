@@ -5,12 +5,14 @@ use paddle::{Frame, FrameHandle, Rectangle, TextBoard, UiElement};
 use wasm_bindgen::JsCast;
 use web_sys::{Element, HtmlInputElement, MessageEvent, RtcDataChannel};
 
+use crate::bottom_tabs::Tabs;
 use crate::webrtc_signaling::{PeerConnection, SignalingServerConnection};
-use crate::{SCREEN_H, SCREEN_W};
+use crate::{palette, PADDING, SCREEN_H, SCREEN_W};
 
-const BUTTON_COLOR: Color = Color::new(0.5, 0.5, 0.5);
-const PEER_COLOR: Color = Color::new(0.5, 0.5, 1.0);
-const PEER_CONNECTED_COLOR: Color = Color::new(0.5, 0.75, 1.0);
+const BACKGROUND: Color = palette::MAIN;
+const BUTTON_COLOR: Color = palette::SHADE;
+const PEER_COLOR: Color = palette::NEUTRAL;
+const PEER_CONNECTED_COLOR: Color = palette::NEUTRAL_DARK;
 
 /// Shows connected peers and allows connecting with more.
 pub(crate) struct NetworkView {
@@ -146,7 +148,7 @@ impl Frame for NetworkView {
     type State = ();
 
     const WIDTH: u32 = SCREEN_W;
-    const HEIGHT: u32 = SCREEN_H;
+    const HEIGHT: u32 = SCREEN_H - Tabs::HEIGHT - 2 * PADDING;
 
     fn draw(
         &mut self,
@@ -154,7 +156,7 @@ impl Frame for NetworkView {
         canvas: &mut paddle::DisplayArea,
         _timestamp: f64,
     ) {
-        canvas.draw(&Self::area(), &Color::INDIGO);
+        canvas.draw(&Self::area(), &BACKGROUND);
         if !self.html_active {
             canvas.add_html(self.html.clone().into());
             self.html_active = true;

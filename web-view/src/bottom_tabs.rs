@@ -2,10 +2,10 @@ use paddle::nuts::UncheckedActivityId;
 use paddle::quicksilver_compat::Color;
 use paddle::{Frame, FrameHandle, Rectangle, UiElement};
 
-use crate::{SCREEN_H, SCREEN_W};
+use crate::{palette, SCREEN_H, SCREEN_W};
 
-const BUTTON_COLOR: Color = Color::new(0.9, 0.9, 0.9);
-const BACKGROUND_COLOR: Color = Color::new(0.1, 0.1, 0.1);
+const BUTTON_COLOR: Color = palette::SHADE;
+const BACKGROUND_COLOR: Color = palette::MAIN;
 
 /// Shows the buttons to switch tabs.
 pub(crate) struct Tabs {
@@ -40,7 +40,7 @@ impl Tabs {
                 vec![network_handle.activity().into()],
             ],
         };
-        let handle = paddle::register_frame_no_state(data, (0, SCREEN_H));
+        let handle = paddle::register_frame_no_state(data, (0, SCREEN_H - Self::HEIGHT));
         handle.listen(Self::switch_tab);
         handle
     }

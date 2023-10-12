@@ -6,11 +6,14 @@ use crate::peer_proxy::PeerProxy;
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
 use crate::worker::{PngRenderWorker, WorkerReady, WorkerResult};
-use crate::{button, network, p2p_proto, progress, PngPart, SCREEN_W};
+use crate::{button, network, p2p_proto, palette, progress, PngPart, PADDING, SCREEN_W};
 
-const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
-const LOCAL_WORKER_COL: Color = Color::new(0.5, 0.1, 0.2);
-const REMOTE_WORKER_COL: Color = Color::new(0.1, 0.1, 0.6);
+const BACKGROUND: Color = crate::palette::NEUTRAL_DARK;
+const LOCAL_WORKER_COL: Color = crate::palette::MAIN;
+const FERMYON_WORKER_COLOR: Color = crate::palette::SHADE;
+const REMOTE_WORKER_COL: Color = crate::palette::NEUTRAL;
+
+const LEFT_COLUMN_WIDTH: u32 = 550;
 
 const MAX_FERMYON_WORKERS: usize = 1;
 const MAX_WORKERS: usize = 20;
@@ -37,8 +40,8 @@ pub enum AddWorker {
 
 impl WorkerView {
     pub fn new(fermyon_img: ImageDesc) -> Self {
-        let x = 10;
-        let width = 500;
+        let x = 2 * PADDING;
+        let width = LEFT_COLUMN_WIDTH - 2 * x;
         let height = 50;
         let header_height = height + 20;
         let line_height = height + 5;
@@ -54,7 +57,7 @@ impl WorkerView {
         let mut header = FloatingText::new_styled(
             &Rectangle::new((x + 10, next_row(header_height)), (width, header_height)),
             "Add worker threads:".to_owned(),
-            &[("color", "white"), ("font-size", "larger")],
+            &[("color", palette::CSS_FONT_LIGHT), ("font-size", "larger")],
             &[],
         )
         .unwrap();
@@ -68,18 +71,21 @@ impl WorkerView {
                     LOCAL_WORKER_COL,
                     AddWorker::InBrowser,
                     "Web Worker".to_owned(),
+                    height as f32 / 2.0,
                 ),
                 button(
                     Rectangle::new((x, next_row(line_height)), (width, height)),
-                    Color::from_rgba(100, 100, 100, 1.0),
+                    FERMYON_WORKER_COLOR,
                     AddWorker::Fermyon,
                     "Fermyon Cloud".to_owned(),
+                    height as f32 / 2.0,
                 ),
                 button(
                     Rectangle::new((x, next_row(line_height)), (width, height)),
                     REMOTE_WORKER_COL,
                     AddWorker::Localhost,
                     "Localhost".to_owned(),
+                    height as f32 / 2.0,
                 ),
             ],
             workers: vec![],
@@ -96,7 +102,7 @@ impl WorkerView {
 impl Frame for WorkerView {
     type State = ();
 
-    const WIDTH: u32 = SCREEN_W - RenderProgress::WIDTH - 5;
+    const WIDTH: u32 = SCREEN_W - RenderProgress::WIDTH - 3 * PADDING;
     const HEIGHT: u32 = RenderProgress::HEIGHT;
 
     fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
@@ -126,7 +132,11 @@ impl Frame for WorkerView {
         for (i, worker) in self.workers.iter().enumerate() {
             let x = i / 5;
             let y = i % 5;
-            let area = Rectangle::new((530 + x * 100, 5 + y * 100), (100, 100)).padded(3.0);
+            let area = Rectangle::new(
+                (LEFT_COLUMN_WIDTH as usize + x * 100, 5 + y * 100),
+                (100, 100),
+            )
+            .padded(3.0);
             worker.draw(canvas, area);
         }
 

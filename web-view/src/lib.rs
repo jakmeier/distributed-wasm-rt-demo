@@ -25,14 +25,19 @@ mod workers_view;
 mod ws;
 
 const SCREEN_W: u32 = 1620;
-const SCREEN_H: u32 = 1620;
+const SCREEN_H: u32 = 2019;
+
+const PADDING: u32 = 7;
+
+pub mod palette;
 
 #[wasm_bindgen]
 pub fn start() {
     // Build configuration object to define all setting
     let config = PaddleConfig::default()
         .with_canvas_id("paddle-canvas-id")
-        .with_resolution((SCREEN_W, SCREEN_H + 150))
+        .with_resolution((SCREEN_W, SCREEN_H))
+        .with_background_color(palette::MAIN)
         .with_text_board(Rectangle::new((100, 100), (500, 1000)))
         .with_texture_config(TextureConfig::default().without_filter());
 
@@ -45,21 +50,22 @@ pub fn start() {
     loader.load();
 
     let state = Main::init();
-    let main_handle = paddle::register_frame(state, (), (40, 0));
+    let main_handle = paddle::register_frame(state, (), (0, 0));
     main_handle.register_receiver(&Main::ping_next_job);
     main_handle.listen(&Main::new_png_part);
     main_handle.listen(&Main::peer_message);
     main_handle.listen(&Main::stop);
 
-    let lower_y = Main::HEIGHT + 5;
-    let progress_handle = paddle::register_frame_no_state(RenderProgress::new(), (40, lower_y));
+    let lower_y = Main::HEIGHT + PADDING;
+    let progress_handle =
+        paddle::register_frame_no_state(RenderProgress::new(), (PADDING, lower_y));
     progress_handle.register_receiver(&RenderProgress::progress_reset);
     progress_handle.register_receiver(&RenderProgress::progress_update);
     progress_handle.listen(&RenderProgress::stop);
 
     let worker_handle = paddle::register_frame_no_state(
         WorkerView::new(fermyon_img),
-        (40 + RenderProgress::WIDTH + 5, lower_y),
+        (2 * PADDING + RenderProgress::WIDTH, lower_y),
     );
     worker_handle.register_receiver(&WorkerView::worker_ready);
     worker_handle.register_receiver(&WorkerView::new_jobs);
@@ -289,9 +295,15 @@ impl ImageData {
     }
 }
 
-fn button<T: 'static + Clone>(area: Rectangle, color: Color, msg: T, text: String) -> UiElement {
+fn button<T: 'static + Clone>(
+    area: Rectangle,
+    color: Color,
+    msg: T,
+    text: String,
+    corner_rounding: f32,
+) -> UiElement {
     UiElement::new(area, color)
-        .with_rounded_corners(25.0)
+        .with_rounded_corners(corner_rounding)
         .with_text(text)
         .unwrap()
         .with_text_alignment(FitStrategy::Center)
