@@ -1,7 +1,8 @@
 use paddle::nuts::UncheckedActivityId;
 use paddle::quicksilver_compat::Color;
-use paddle::{Frame, FrameHandle, Rectangle, UiElement};
+use paddle::{Frame, FrameHandle, ImageDesc, Rectangle, UiElement};
 
+use crate::images::Images;
 use crate::{palette, SCREEN_H, SCREEN_W};
 
 const BUTTON_COLOR: Color = palette::SHADE;
@@ -25,11 +26,23 @@ impl Tabs {
         progress_handle: FrameHandle<crate::RenderProgress>,
         worker_handle: FrameHandle<crate::WorkerView>,
         network_handle: FrameHandle<crate::NetworkView>,
+        images: &Images,
     ) -> FrameHandle<Self> {
-        let home_button = tab_button("Home", 0);
-        let network_button = tab_button("Network", 1);
+        let home_button = tab_button(images.home, 0);
+        let network_button = tab_button(images.web, 1);
+        let settings_button = tab_button(images.settings, 2);
+        let stats_button = tab_button(images.stats, 3);
         let data = Self {
-            buttons: vec![home_button, network_button],
+            buttons: vec![
+                home_button.0,
+                home_button.1,
+                network_button.0,
+                network_button.1,
+                settings_button.0,
+                settings_button.1,
+                stats_button.0,
+                stats_button.1,
+            ],
             active_tab: 0,
             tab_activities: vec![
                 vec![
@@ -38,6 +51,8 @@ impl Tabs {
                     worker_handle.activity().into(),
                 ],
                 vec![network_handle.activity().into()],
+                vec![],
+                vec![],
             ],
         };
         let handle = paddle::register_frame_no_state(data, (0, SCREEN_H - Self::HEIGHT));
@@ -56,19 +71,18 @@ impl Tabs {
     }
 }
 
-fn tab_button(text: &'static str, index: usize) -> UiElement {
-    let network = UiElement::new(
-        Rectangle::new((2 + 150 * index, 2), (146, 146)),
-        BUTTON_COLOR,
-    )
-    .with_text(text.to_string())
-    .unwrap()
-    .with_rounded_corners(15.0)
-    .with_pointer_interaction(
-        paddle::PointerEventType::PrimaryClick,
-        SwitchTabMsg { index },
-    );
-    network
+fn tab_button(img: ImageDesc, index: usize) -> (UiElement, UiElement) {
+    let area = Rectangle::new((10 + 150 * index, 2), (140, 140));
+    let background = UiElement::new(area.padded(10.0), img).with_z(1);
+    let image = UiElement::new(area, BUTTON_COLOR.with_alpha(0.5))
+        .with_rounded_corners(15.0)
+        .with_pointer_interaction(
+            paddle::PointerEventType::PrimaryClick,
+            SwitchTabMsg { index },
+        )
+        .with_z(0);
+
+    (background, image)
 }
 
 impl Frame for Tabs {

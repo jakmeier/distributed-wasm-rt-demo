@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bottom_tabs::Tabs;
+use images::Images;
 use js_sys::Uint8Array;
 use network::NetworkView;
 use p2p_proto::RenderControlBody;
@@ -13,8 +14,10 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use workers_view::WorkerView;
 
 mod bottom_tabs;
+mod images;
 mod network;
 mod p2p_proto;
+mod palette;
 mod peer_proxy;
 mod progress;
 mod render;
@@ -29,8 +32,6 @@ const SCREEN_H: u32 = 2019;
 
 const PADDING: u32 = 7;
 
-pub mod palette;
-
 #[wasm_bindgen]
 pub fn start() {
     // Build configuration object to define all setting
@@ -44,12 +45,9 @@ pub fn start() {
     // Initialize framework state and connect to browser window
     paddle::init(config).expect("Paddle initialization failed.");
 
-    let mut loader = AssetBundle::new();
-    let fermyon_img = ImageDesc::from_path("assets/fermyon.png");
-    loader.add_images(&[fermyon_img]);
-    loader.load();
+    let images = Images::load();
 
-    let state = Main::init();
+    let state = Main::init(&images);
     let main_handle = paddle::register_frame(state, (), (0, 0));
     main_handle.register_receiver(&Main::ping_next_job);
     main_handle.listen(&Main::new_png_part);
@@ -64,7 +62,7 @@ pub fn start() {
     progress_handle.listen(&RenderProgress::stop);
 
     let worker_handle = paddle::register_frame_no_state(
-        WorkerView::new(fermyon_img),
+        WorkerView::new(&images),
         (2 * PADDING + RenderProgress::WIDTH, lower_y),
     );
     worker_handle.register_receiver(&WorkerView::worker_ready);
@@ -77,7 +75,13 @@ pub fn start() {
 
     let network_handle = NetworkView::init();
     network_handle.listen(&NetworkView::new_png_part);
-    let _tabs_handle = Tabs::init(main_handle, progress_handle, worker_handle, network_handle);
+    let _tabs_handle = Tabs::init(
+        main_handle,
+        progress_handle,
+        worker_handle,
+        network_handle,
+        &images,
+    );
 
     paddle::share(workers_view::AddWorker::InBrowser);
     paddle::share(workers_view::AddWorker::InBrowser);
@@ -86,6 +90,8 @@ pub fn start() {
 }
 
 struct Main {
+    default_image: ImageDesc,
+
     /// Image is rendered in increasing quality each time triggered.
     next_quality: u32,
 
@@ -112,6 +118,9 @@ impl paddle::Frame for Main {
         canvas.fit_display(5.0);
         for part in &self.imgs {
             canvas.draw(&part.screen_area, &part.img.img);
+        }
+        if self.imgs.is_empty() {
+            canvas.draw(&Self::area().shrink_to_center(0.25), &self.default_image);
         }
     }
 
@@ -140,12 +149,13 @@ struct ImageData {
 }
 
 impl Main {
-    fn init() -> Self {
+    fn init(images: &Images) -> Self {
         Main {
             next_quality: 0,
             imgs: vec![],
             old_images: 0,
             outstanding_jobs: 0,
+            default_image: images.screen,
         }
     }
 

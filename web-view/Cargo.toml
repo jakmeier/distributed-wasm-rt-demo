@@ -7,7 +7,7 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-paddle = {rev = "c4ff1dd2353b914c3a7123882779c7fe8c041427", git = "https://github.com/jakmeier/paddle.git"}
+paddle = {rev = "0a7efb37373e596184248eee66c27982d8ae10f5", git = "https://github.com/jakmeier/paddle.git"}
 
 ntmy = {path = "../ntmy"}
 

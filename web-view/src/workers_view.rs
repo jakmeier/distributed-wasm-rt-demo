@@ -1,12 +1,13 @@
 use paddle::quicksilver_compat::Color;
 use paddle::{FloatingText, Frame, ImageDesc, Rectangle, TextBoard, UiElement};
 
+use crate::images::Images;
 use crate::p2p_proto::{JobBody, RenderControlBody};
 use crate::peer_proxy::PeerProxy;
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
 use crate::worker::{PngRenderWorker, WorkerReady, WorkerResult};
-use crate::{button, network, p2p_proto, palette, progress, PngPart, PADDING, SCREEN_W};
+use crate::{button, network, p2p_proto, progress, PngPart, PADDING, SCREEN_W};
 
 const BACKGROUND: Color = crate::palette::NEUTRAL_DARK;
 const LOCAL_WORKER_COL: Color = crate::palette::MAIN;
@@ -25,6 +26,8 @@ pub(crate) struct WorkerView {
     fermyon_workers: usize,
     job_pool: Vec<RenderTask>,
     fermyon_img: ImageDesc,
+    worker_img: ImageDesc,
+    loading_img: ImageDesc,
     peers: PeerProxy,
     texts: Vec<FloatingText>,
     graphics_init: bool,
@@ -39,11 +42,10 @@ pub enum AddWorker {
 }
 
 impl WorkerView {
-    pub fn new(fermyon_img: ImageDesc) -> Self {
+    pub fn new(imgs: &Images) -> Self {
         let x = 2 * PADDING;
         let width = LEFT_COLUMN_WIDTH - 2 * x;
         let height = 50;
-        let header_height = height + 20;
         let line_height = height + 5;
 
         // helper to keep adding to y as more ui elements are created
@@ -54,16 +56,6 @@ impl WorkerView {
             before
         };
 
-        let mut header = FloatingText::new_styled(
-            &Rectangle::new((x + 10, next_row(header_height)), (width, header_height)),
-            "Add worker threads:".to_owned(),
-            &[("color", palette::CSS_FONT_LIGHT), ("font-size", "larger")],
-            &[],
-        )
-        .unwrap();
-        header
-            .update_fit_strategy(paddle::FitStrategy::TopLeft)
-            .unwrap();
         Self {
             buttons: vec![
                 button(
@@ -91,9 +83,11 @@ impl WorkerView {
             workers: vec![],
             fermyon_workers: 0,
             job_pool: vec![],
-            fermyon_img,
+            fermyon_img: imgs.fermyon,
+            worker_img: imgs.worker,
+            loading_img: imgs.loading,
             peers: Default::default(),
-            texts: vec![header],
+            texts: vec![],
             graphics_init: false,
         }
     }
@@ -111,12 +105,7 @@ impl Frame for WorkerView {
         }
     }
 
-    fn draw(
-        &mut self,
-        _state: &mut Self::State,
-        canvas: &mut paddle::DisplayArea,
-        _timestamp: f64,
-    ) {
+    fn draw(&mut self, _state: &mut Self::State, canvas: &mut paddle::DisplayArea, timestamp: f64) {
         if !self.graphics_init {
             self.graphics_init = true;
             for text in &mut self.texts {
@@ -137,7 +126,7 @@ impl Frame for WorkerView {
                 (100, 100),
             )
             .padded(3.0);
-            worker.draw(canvas, area);
+            worker.draw(canvas, area, timestamp);
         }
 
         for text in &mut self.texts {
@@ -196,6 +185,8 @@ impl WorkerView {
                     self.workers.len(),
                     None,
                     Box::new(LOCAL_WORKER_COL),
+                    self.loading_img,
+                    self.worker_img,
                 ));
             }
             AddWorker::Localhost => {
@@ -203,6 +194,8 @@ impl WorkerView {
                     self.workers.len(),
                     Some("http://127.0.0.1:3000".to_owned()),
                     Box::new(REMOTE_WORKER_COL),
+                    self.loading_img,
+                    self.worker_img,
                 ));
             }
             AddWorker::Fermyon => {
@@ -216,7 +209,9 @@ impl WorkerView {
                 self.workers.push(PngRenderWorker::new(
                     self.workers.len(),
                     Some("http://jakmeier-clumsy-rt-demo.fermyon.app".to_owned()),
-                    Box::new(self.fermyon_img),
+                    Box::new(FERMYON_WORKER_COLOR),
+                    self.loading_img,
+                    self.fermyon_img,
                 ));
                 self.fermyon_workers += 1;
             }

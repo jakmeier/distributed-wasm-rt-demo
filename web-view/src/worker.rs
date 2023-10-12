@@ -1,6 +1,6 @@
 use js_sys::Uint32Array;
-use paddle::quicksilver_compat::Color;
-use paddle::{FloatingText, Rectangle, Transform};
+use paddle::quicksilver_compat::{Color, Shape};
+use paddle::{FloatingText, ImageDesc, Rectangle, Transform};
 use std::cell::RefCell;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -28,6 +28,8 @@ pub(crate) struct PngRenderWorker {
     displayable: Box<dyn paddle::DisplayPaint>,
     start: chrono::NaiveDateTime,
     prev_time: RefCell<FloatingText>,
+    ready_img: ImageDesc,
+    loading_img: ImageDesc,
 }
 pub(crate) trait TaskRenderer {
     /// Enqueues a new task that will be executed eventually.
@@ -87,6 +89,8 @@ impl PngRenderWorker {
         worker_id: usize,
         remote_url: Option<String>,
         displayable: Box<dyn paddle::DisplayPaint>,
+        loading_img: ImageDesc,
+        ready_img: ImageDesc,
     ) -> Self {
         let ctx: Box<dyn TaskRenderer> = if let Some(url) = remote_url {
             Box::new(RemoteWorkerContext::new(url, worker_id))
@@ -104,6 +108,8 @@ impl PngRenderWorker {
             displayable,
             prev_time: RefCell::new(text),
             interrupted: false,
+            loading_img,
+            ready_img,
         }
     }
 
@@ -162,16 +168,27 @@ impl PngRenderWorker {
     }
 
     /// Display self in the specified area.
-    pub fn draw(&self, canvas: &mut paddle::DisplayArea, area: Rectangle) {
+    pub fn draw(&self, canvas: &mut paddle::DisplayArea, area: Rectangle, timestamp: f64) {
         if self.current_job.is_some() {
             canvas.draw(&area, &Color::WHITE);
+            let trans = Transform::translate(area.center())
+                * Transform::rotate(timestamp / 10.0)
+                * Transform::translate(-area.center());
+            canvas.draw_ex(&area.shrink_to_center(0.8), &self.loading_img, trans, 1);
+        } else {
+            canvas.draw_ex(
+                &area.shrink_to_center(0.8),
+                &self.ready_img,
+                Transform::default(),
+                1,
+            );
         }
         canvas.draw_ex(&area.padded(2.0), &self.displayable, Transform::IDENTITY, 0);
-        self.prev_time
-            .borrow_mut()
-            .update_position(&canvas.frame_to_display_area(area), 0)
-            .unwrap();
-        self.prev_time.borrow_mut().draw();
+        // self.prev_time
+        //     .borrow_mut()
+        //     .update_position(&canvas.frame_to_display_area(area), 0)
+        //     .unwrap();
+        // self.prev_time.borrow_mut().draw();
     }
 
     pub fn active(&self) {
