@@ -10,9 +10,6 @@ use crate::render::RenderTask;
 use crate::workers_view::WorkerView;
 use crate::ImageData;
 
-pub(crate) const LOCAL_WORKER_COL: Color = Color::new(0.5, 0.1, 0.2);
-pub(crate) const REMOTE_WORKER_COL: Color = Color::new(0.1, 0.1, 0.6);
-
 /// Worker has completed initialization.
 pub(crate) struct WorkerReady(pub usize);
 

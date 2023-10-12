@@ -133,6 +133,9 @@ impl Frame for RenderProgress {
 
     fn enter(&mut self, _state: &mut Self::State) {
         self.bar_text.show().unwrap();
+        for text in &self.sub_text {
+            text.show().unwrap();
+        }
         self.stop_button.active();
     }
 }

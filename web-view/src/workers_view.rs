@@ -1,24 +1,30 @@
 use paddle::quicksilver_compat::Color;
-use paddle::{Frame, ImageDesc, Rectangle, UiElement};
+use paddle::{FloatingText, Frame, ImageDesc, Rectangle, TextBoard, UiElement};
 
 use crate::p2p_proto::{JobBody, RenderControlBody};
 use crate::peer_proxy::PeerProxy;
 use crate::progress::RenderProgress;
 use crate::render::RenderTask;
-use crate::worker::{
-    self, PngRenderWorker, WorkerReady, WorkerResult, LOCAL_WORKER_COL, REMOTE_WORKER_COL,
-};
+use crate::worker::{PngRenderWorker, WorkerReady, WorkerResult};
 use crate::{button, network, p2p_proto, progress, PngPart, SCREEN_W};
 
 const BACKGROUND: Color = Color::new(0.1, 0.1, 0.2);
+const LOCAL_WORKER_COL: Color = Color::new(0.5, 0.1, 0.2);
+const REMOTE_WORKER_COL: Color = Color::new(0.1, 0.1, 0.6);
+
+const MAX_FERMYON_WORKERS: usize = 1;
+const MAX_WORKERS: usize = 20;
 
 /// Displays the connected workers and allows adding more workers.
 pub(crate) struct WorkerView {
     buttons: Vec<UiElement>,
     workers: Vec<PngRenderWorker>,
+    fermyon_workers: usize,
     job_pool: Vec<RenderTask>,
     fermyon_img: ImageDesc,
     peers: PeerProxy,
+    texts: Vec<FloatingText>,
+    graphics_init: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -31,31 +37,58 @@ pub enum AddWorker {
 
 impl WorkerView {
     pub fn new(fermyon_img: ImageDesc) -> Self {
+        let x = 10;
+        let width = 500;
+        let height = 50;
+        let header_height = height + 20;
+        let line_height = height + 5;
+
+        // helper to keep adding to y as more ui elements are created
+        let mut y = 20;
+        let mut next_row = |offset: u32| {
+            let before = y;
+            y += offset;
+            before
+        };
+
+        let mut header = FloatingText::new_styled(
+            &Rectangle::new((x + 10, next_row(header_height)), (width, header_height)),
+            "Add worker threads:".to_owned(),
+            &[("color", "white"), ("font-size", "larger")],
+            &[],
+        )
+        .unwrap();
+        header
+            .update_fit_strategy(paddle::FitStrategy::TopLeft)
+            .unwrap();
         Self {
             buttons: vec![
                 button(
-                    Rectangle::new((10, 10), (50, 50)),
-                    worker::LOCAL_WORKER_COL,
+                    Rectangle::new((x, next_row(line_height)), (width, height)),
+                    LOCAL_WORKER_COL,
                     AddWorker::InBrowser,
-                    "local".to_owned(),
+                    "Web Worker".to_owned(),
                 ),
                 button(
-                    Rectangle::new((10, 65), (50, 50)),
-                    worker::REMOTE_WORKER_COL,
-                    AddWorker::Localhost,
-                    "remote".to_owned(),
-                ),
-                button(
-                    Rectangle::new((10, 120), (50, 50)),
+                    Rectangle::new((x, next_row(line_height)), (width, height)),
                     Color::from_rgba(100, 100, 100, 1.0),
                     AddWorker::Fermyon,
-                    "fermyon".to_owned(),
+                    "Fermyon Cloud".to_owned(),
+                ),
+                button(
+                    Rectangle::new((x, next_row(line_height)), (width, height)),
+                    REMOTE_WORKER_COL,
+                    AddWorker::Localhost,
+                    "Localhost".to_owned(),
                 ),
             ],
             workers: vec![],
+            fermyon_workers: 0,
             job_pool: vec![],
             fermyon_img,
             peers: Default::default(),
+            texts: vec![header],
+            graphics_init: false,
         }
     }
 }
@@ -78,6 +111,12 @@ impl Frame for WorkerView {
         canvas: &mut paddle::DisplayArea,
         _timestamp: f64,
     ) {
+        if !self.graphics_init {
+            self.graphics_init = true;
+            for text in &mut self.texts {
+                canvas.add_text(text);
+            }
+        }
         canvas.draw(&Self::area(), &BACKGROUND);
 
         for button in &self.buttons {
@@ -87,8 +126,12 @@ impl Frame for WorkerView {
         for (i, worker) in self.workers.iter().enumerate() {
             let x = i / 5;
             let y = i % 5;
-            let area = Rectangle::new((65 + x * 100, 5 + y * 100), (100, 100)).padded(3.0);
+            let area = Rectangle::new((530 + x * 100, 5 + y * 100), (100, 100)).padded(3.0);
             worker.draw(canvas, area);
+        }
+
+        for text in &mut self.texts {
+            text.draw();
         }
     }
 
@@ -112,6 +155,9 @@ impl Frame for WorkerView {
         for worker in &self.workers {
             worker.inactive();
         }
+        for text in &self.texts {
+            text.hide().unwrap();
+        }
     }
 
     fn enter(&mut self, _state: &mut Self::State) {
@@ -121,12 +167,19 @@ impl Frame for WorkerView {
         for worker in &self.workers {
             worker.active();
         }
+        for text in &self.texts {
+            text.show().unwrap();
+        }
     }
 }
 
 impl WorkerView {
     /// paddle event listener
     pub fn add_worker(&mut self, _state: &mut (), msg: &AddWorker) {
+        if self.workers.len() >= MAX_WORKERS {
+            TextBoard::display_error_message("Maximum number of workers reached.".into()).unwrap();
+            return;
+        }
         match msg {
             AddWorker::InBrowser => {
                 self.workers.push(PngRenderWorker::new(
@@ -143,11 +196,19 @@ impl WorkerView {
                 ));
             }
             AddWorker::Fermyon => {
+                if self.fermyon_workers >= MAX_FERMYON_WORKERS {
+                    TextBoard::display_error_message(
+                        "No additional Fermyon workers allowed.".into(),
+                    )
+                    .unwrap();
+                    return;
+                }
                 self.workers.push(PngRenderWorker::new(
                     self.workers.len(),
                     Some("http://jakmeier-clumsy-rt-demo.fermyon.app".to_owned()),
                     Box::new(self.fermyon_img),
                 ));
+                self.fermyon_workers += 1;
             }
         }
     }
