@@ -8,6 +8,7 @@ use network::NetworkView;
 use p2p_proto::RenderControlBody;
 use paddle::quicksilver_compat::Color;
 use paddle::*;
+use palette::CSS_FONT_DARK;
 use progress::{ProgressMade, ProgressReset, RenderProgress};
 use render::{RenderSettings, RenderTask};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -29,6 +30,9 @@ mod ws;
 
 const SCREEN_W: u32 = 1620;
 const SCREEN_H: u32 = 2019;
+
+const SECONDARY_X: u32 = PADDING;
+const SECONDARY_Y: u32 = Main::HEIGHT + PADDING;
 
 const PADDING: u32 = 7;
 
@@ -54,16 +58,15 @@ pub fn start() {
     main_handle.listen(&Main::peer_message);
     main_handle.listen(&Main::stop);
 
-    let lower_y = Main::HEIGHT + PADDING;
     let progress_handle =
-        paddle::register_frame_no_state(RenderProgress::new(), (PADDING, lower_y));
+        paddle::register_frame_no_state(RenderProgress::new(), (SECONDARY_X, SECONDARY_Y));
     progress_handle.register_receiver(&RenderProgress::progress_reset);
     progress_handle.register_receiver(&RenderProgress::progress_update);
     progress_handle.listen(&RenderProgress::stop);
 
     let worker_handle = paddle::register_frame_no_state(
         WorkerView::new(&images),
-        (2 * PADDING + RenderProgress::WIDTH, lower_y),
+        (2 * PADDING + RenderProgress::WIDTH, SECONDARY_Y),
     );
     worker_handle.register_receiver(&WorkerView::worker_ready);
     worker_handle.register_receiver(&WorkerView::new_jobs);
@@ -312,11 +315,13 @@ fn button<T: 'static + Clone>(
     text: String,
     corner_rounding: f32,
 ) -> UiElement {
-    UiElement::new(area, color)
+    let mut el = UiElement::new(area, color)
         .with_rounded_corners(corner_rounding)
         .with_text(text)
         .unwrap()
         .with_text_alignment(FitStrategy::Center)
         .unwrap()
-        .with_pointer_interaction(PointerEventType::PrimaryClick, msg)
+        .with_pointer_interaction(PointerEventType::PrimaryClick, msg);
+    el.add_text_css("color", CSS_FONT_DARK);
+    el
 }

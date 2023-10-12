@@ -7,3 +7,10 @@ body {
     margin: auto;
     text-align: center;
 }
+
+#new_peer_id {
+    margin: 10px;
+    font-size: large;
+    background-color: #E9FFF9;
+    border-color: #D64045;
+}

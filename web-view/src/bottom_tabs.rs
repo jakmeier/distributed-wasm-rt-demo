@@ -50,9 +50,12 @@ impl Tabs {
                     progress_handle.activity().into(),
                     worker_handle.activity().into(),
                 ],
-                vec![network_handle.activity().into()],
-                vec![],
-                vec![],
+                vec![
+                    main_handle.activity().into(),
+                    network_handle.activity().into(),
+                ],
+                vec![main_handle.activity().into()],
+                vec![main_handle.activity().into()],
             ],
         };
         let handle = paddle::register_frame_no_state(data, (0, SCREEN_H - Self::HEIGHT));

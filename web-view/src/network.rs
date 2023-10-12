@@ -7,12 +7,12 @@ use web_sys::{Element, HtmlInputElement, MessageEvent, RtcDataChannel};
 
 use crate::bottom_tabs::Tabs;
 use crate::webrtc_signaling::{PeerConnection, SignalingServerConnection};
-use crate::{palette, PADDING, SCREEN_H, SCREEN_W};
+use crate::{palette, Main, PADDING, SCREEN_H, SCREEN_W, SECONDARY_X, SECONDARY_Y};
 
-const BACKGROUND: Color = palette::MAIN;
-const BUTTON_COLOR: Color = palette::SHADE;
+const BACKGROUND: Color = palette::NEUTRAL_DARK;
+const BUTTON_COLOR: Color = palette::MAIN;
 const PEER_COLOR: Color = palette::NEUTRAL;
-const PEER_CONNECTED_COLOR: Color = palette::NEUTRAL_DARK;
+const PEER_CONNECTED_COLOR: Color = palette::SHADE;
 
 /// Shows connected peers and allows connecting with more.
 pub(crate) struct NetworkView {
@@ -20,6 +20,7 @@ pub(crate) struct NetworkView {
     html: Element,
     new_id_field: HtmlInputElement,
     button: UiElement,
+    text: UiElement,
     peers: HashMap<String, Peer>,
 }
 
@@ -46,26 +47,27 @@ impl NetworkView {
 
         let doc = web_sys::window().unwrap().document().unwrap();
         let html = doc.create_element("div").unwrap();
-        let label = doc.create_element("label").unwrap();
-        label.set_inner_html("Connection ID (must match that of the peer)");
         let new_id_field = paddle::html::text_input("new_peer_id");
         new_id_field.set_value(&generate_key());
-        html.append_child(&label).unwrap();
         html.append_child(&new_id_field).unwrap();
 
-        let button = UiElement::new(
-            Rectangle::new((100, 100), (Self::WIDTH - 200, 200)),
-            BUTTON_COLOR,
+        let mut text = UiElement::new(
+            Rectangle::new((100, 100), (Self::WIDTH - 200, 100)),
+            palette::NEUTRAL,
         )
-        .with_pointer_interaction(
-            paddle::PointerEventType::PrimaryClick,
-            OpenNewPeerConnectionMsg,
-        )
-        .with_rounded_corners(15.0)
-        .with_text("Find Peer".to_owned())
+        .with_text("Match the ID above  on two devices and click below to connect.".to_owned())
         .unwrap()
         .with_text_alignment(paddle::FitStrategy::Center)
         .unwrap();
+        text.add_text_css("color", palette::CSS_FONT_DARK);
+
+        let button = crate::button(
+            Rectangle::new((100, 250), (Self::WIDTH - 200, 100)),
+            BUTTON_COLOR,
+            OpenNewPeerConnectionMsg,
+            "Find Peer".to_owned(),
+            50.0,
+        );
 
         let data = Self {
             html_active: false,
@@ -73,8 +75,9 @@ impl NetworkView {
             new_id_field,
             button,
             peers: HashMap::new(),
+            text,
         };
-        let handle = paddle::register_frame_no_state(data, (0, 0));
+        let handle = paddle::register_frame_no_state(data, (SECONDARY_X, SECONDARY_Y));
         handle
             .activity()
             .set_status(paddle::nuts::LifecycleStatus::Inactive);
@@ -94,8 +97,7 @@ impl NetworkView {
             // of this is super interesting but requires some work.
             // For the demo, two peers are sufficient to show the necessary
             // points, so let's avoid the extra work.
-            TextBoard::display_error_message("Only 1 peer supported in this demo.".to_owned())
-                .unwrap();
+            TextBoard::display_error_message("Only 1 peer supported.".to_owned()).unwrap();
             return;
         }
         let id = self.new_id_field.value();
@@ -108,11 +110,17 @@ impl NetworkView {
             let connection =
                 SignalingServerConnection::new_connection(id.clone(), on_open, on_message);
             let i = self.peers.len();
-            let area = Rectangle::new((100, 400 + 110 * i), (Self::WIDTH - 200, 100));
-            let ui = UiElement::new(area, PEER_COLOR)
+            let area = Rectangle::new((Self::WIDTH / 4, 380 + 110 * i), (Self::WIDTH / 2, 100));
+            let mut ui = UiElement::new(area, PEER_COLOR)
                 .with_text(id.clone())
+                .unwrap()
+                .with_text_alignment(paddle::FitStrategy::Center)
                 .unwrap();
+            ui.add_text_css("color", palette::CSS_FONT_DARK);
             self.peers.insert(id, Peer { connection, ui });
+            self.text
+                .set_text(Some("Connecting...".to_owned()))
+                .unwrap();
         }
     }
 
@@ -121,6 +129,8 @@ impl NetworkView {
         let id = &msg.0;
         if let Some(peer) = self.peers.get_mut(id) {
             peer.ui.set_paint(PEER_CONNECTED_COLOR);
+            self.text.set_paint(PEER_CONNECTED_COLOR);
+            self.text.set_text(Some("Connected".to_owned())).unwrap();
         } else {
             paddle::println!("got connection for {id} without a stored peer object");
         }
@@ -147,8 +157,8 @@ impl NetworkView {
 impl Frame for NetworkView {
     type State = ();
 
-    const WIDTH: u32 = SCREEN_W;
-    const HEIGHT: u32 = SCREEN_H - Tabs::HEIGHT - 2 * PADDING;
+    const WIDTH: u32 = SCREEN_W - 2 * PADDING;
+    const HEIGHT: u32 = SCREEN_H - Main::HEIGHT - Tabs::HEIGHT - 2 * PADDING;
 
     fn draw(
         &mut self,
@@ -162,6 +172,7 @@ impl Frame for NetworkView {
             self.html_active = true;
         }
         self.button.draw(canvas);
+        self.text.draw(canvas);
 
         for peer in self.peers.values() {
             peer.ui.draw(canvas);
@@ -174,6 +185,7 @@ impl Frame for NetworkView {
 
     fn enter(&mut self, _state: &mut Self::State) {
         self.button.active();
+        self.text.active();
         for peer in self.peers.values() {
             peer.ui.active();
         }
@@ -181,6 +193,7 @@ impl Frame for NetworkView {
 
     fn leave(&mut self, _state: &mut Self::State) {
         self.button.inactive();
+        self.text.inactive();
         for peer in self.peers.values() {
             peer.ui.inactive();
         }
