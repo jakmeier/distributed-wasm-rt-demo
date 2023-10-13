@@ -11,7 +11,6 @@ pub(crate) struct RenderSettingsView {
     preset_level: Option<u32>,
     recursion: Slider<u32>,
     samples: Slider<u32>,
-    num_jobs: u32,
 }
 
 impl Frame for RenderSettingsView {
@@ -57,7 +56,7 @@ impl RenderSettingsView {
         let knob_color = palette::NEUTRAL_DARK;
         let mut recursion = Slider::new(
             Rectangle::new((PADDING, PADDING), (Self::WIDTH - 2 * PADDING, 200)),
-            "Reflection depth".to_owned(),
+            "Reflection depth (color)".to_owned(),
             (1..31).collect(),
             main_color,
             secondary_color,
@@ -81,7 +80,6 @@ impl RenderSettingsView {
             preset_level: Some(0),
             recursion,
             samples,
-            num_jobs: 256,
         };
         let handle = paddle::register_frame_no_state(this, (SECONDARY_X, SECONDARY_Y));
         handle.listen(Self::ping_next_job);
@@ -94,8 +92,9 @@ impl RenderSettingsView {
     /// paddle event listener
     fn ping_next_job(&mut self, _: &mut (), _msg: &RequestNewRender) {
         let settings = self.render_settings();
+        let num_jobs = settings.proposed_num_jobs();
         let job = RenderTask::new(Main::area(), settings);
-        let jobs = job.divide(self.num_jobs);
+        let jobs = job.divide(num_jobs);
         paddle::send::<_, Main>(EnqueueNewRender(jobs));
     }
 
@@ -119,6 +118,18 @@ impl RenderSettingsView {
 }
 
 impl RenderSettings {
+    fn proposed_num_jobs(&self) -> u32 {
+        match self.recursion * self.samples {
+            n if n < 4 => 16,
+            n if n < 10 => 32,
+            n if n < 50 => 64,
+            n if n < 100 => 128,
+            n if n < 200 => 256,
+            n if n < 500 => 512,
+            _ => 1024,
+        }
+    }
+
     fn preset(level: u32) -> Self {
         let samples;
         let recursion;
