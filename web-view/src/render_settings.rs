@@ -1,12 +1,17 @@
-use paddle::{Frame, FrameHandle};
+use paddle::{Frame, FrameHandle, Rectangle};
 
 use crate::render::{RenderSettings, RenderTask};
+use crate::ui_slider::Slider;
 use crate::{
-    EnqueueNewRender, Main, RequestNewRender, SECONDARY_H, SECONDARY_W, SECONDARY_X, SECONDARY_Y,
+    palette, EnqueueNewRender, Main, RequestNewRender, PADDING, SECONDARY_H, SECONDARY_W,
+    SECONDARY_X, SECONDARY_Y,
 };
 
 pub(crate) struct RenderSettingsView {
-    current_quality: u32,
+    preset_level: Option<u32>,
+    recursion: Slider<u32>,
+    samples: Slider<u32>,
+    num_jobs: u32,
 }
 
 impl Frame for RenderSettingsView {
@@ -14,11 +19,70 @@ impl Frame for RenderSettingsView {
 
     const WIDTH: u32 = SECONDARY_W;
     const HEIGHT: u32 = SECONDARY_H;
+
+    fn draw(
+        &mut self,
+        _state: &mut Self::State,
+        canvas: &mut paddle::DisplayArea,
+        _timestamp: f64,
+    ) {
+        self.recursion.draw(canvas);
+        self.samples.draw(canvas);
+    }
+
+    fn pointer(&mut self, _state: &mut Self::State, event: paddle::PointerEvent) {
+        let mut adjusted = false;
+        adjusted |= self.recursion.adjust(event);
+        adjusted |= self.samples.adjust(event);
+        if adjusted {
+            self.preset_level = None;
+        }
+    }
+
+    fn enter(&mut self, _state: &mut Self::State) {
+        self.recursion.active();
+        self.samples.active();
+    }
+
+    fn leave(&mut self, _state: &mut Self::State) {
+        self.recursion.inactive();
+        self.samples.inactive();
+    }
 }
 
 impl RenderSettingsView {
     pub(crate) fn init() -> FrameHandle<Self> {
-        let this = Self { current_quality: 0 };
+        let main_color = palette::SHADE;
+        let secondary_color = palette::NEUTRAL;
+        let knob_color = palette::NEUTRAL_DARK;
+        let mut recursion = Slider::new(
+            Rectangle::new((PADDING, PADDING), (Self::WIDTH - 2 * PADDING, 200)),
+            "Reflection depth".to_owned(),
+            (1..31).collect(),
+            main_color,
+            secondary_color,
+            knob_color,
+        );
+        let mut samples = Slider::new(
+            Rectangle::new(
+                (PADDING, 2 * PADDING + 200),
+                (Self::WIDTH - 2 * PADDING, 200),
+            ),
+            "Samples (smoothness)".to_owned(),
+            (1..256).collect(),
+            main_color,
+            secondary_color,
+            knob_color,
+        );
+        let init = RenderSettings::preset(0);
+        recursion.set_value(&init.recursion);
+        samples.set_value(&init.samples);
+        let this = Self {
+            preset_level: Some(0),
+            recursion,
+            samples,
+            num_jobs: 256,
+        };
         let handle = paddle::register_frame_no_state(this, (SECONDARY_X, SECONDARY_Y));
         handle.listen(Self::ping_next_job);
         handle.listen(Self::render_done);
@@ -30,39 +94,42 @@ impl RenderSettingsView {
     /// paddle event listener
     fn ping_next_job(&mut self, _: &mut (), _msg: &RequestNewRender) {
         let settings = self.render_settings();
-        let num_jobs = match self.current_quality {
-            0..=2 => 32,
-            3 => 128,
-            4 => 256,
-            5 => 512,
-            _ => 1024,
-        };
-
-        let jobs = RenderTask::new(Main::area(), settings).divide(num_jobs);
+        let job = RenderTask::new(Main::area(), settings);
+        let jobs = job.divide(self.num_jobs);
         paddle::send::<_, Main>(EnqueueNewRender(jobs));
     }
 
     /// paddle event listener
     fn render_done(&mut self, _: &mut (), _msg: &crate::RenderFinished) {
-        self.current_quality += 1;
+        if let Some(level) = &mut self.preset_level {
+            *level += 1;
+            let new = RenderSettings::preset(*level);
+            self.samples.set_value(&new.samples);
+            self.recursion.set_value(&new.recursion);
+        }
     }
 
     pub(crate) fn render_settings(&mut self) -> RenderSettings {
-        // self.current_quality += 1;
+        RenderSettings {
+            resolution: (Main::WIDTH, Main::HEIGHT),
+            samples: *self.samples.value(),
+            recursion: *self.recursion.value(),
+        }
+    }
+}
 
-        let mut resolution = 1.0;
+impl RenderSettings {
+    fn preset(level: u32) -> Self {
         let samples;
         let recursion;
-        match self.current_quality {
+        match level {
             0 => {
-                resolution = 0.25;
                 samples = 1;
                 recursion = 2;
             }
             1 => {
-                resolution = 0.5;
                 samples = 1;
-                recursion = 4;
+                recursion = 2;
             }
             2 => {
                 samples = 4;
@@ -70,27 +137,23 @@ impl RenderSettingsView {
             }
             3 => {
                 samples = 4;
-                recursion = 100;
+                recursion = 6;
             }
             4 => {
                 samples = 64;
-                recursion = 100;
+                recursion = 8;
             }
             5 => {
-                samples = 256;
-                recursion = 200;
+                samples = 128;
+                recursion = 12;
             }
             6 | _ => {
-                // very slightly better bright spot reflection
-                samples = 1024;
-                recursion = 512;
+                samples = 255;
+                recursion = 16;
             }
         }
-        RenderSettings {
-            resolution: (
-                (Main::WIDTH as f32 * resolution) as u32,
-                (Main::HEIGHT as f32 * resolution) as u32,
-            ),
+        Self {
+            resolution: (Main::WIDTH, Main::HEIGHT),
             samples,
             recursion,
         }

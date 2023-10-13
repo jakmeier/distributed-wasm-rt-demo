@@ -24,6 +24,7 @@ mod peer_proxy;
 mod progress;
 mod render;
 mod render_settings;
+mod ui_slider;
 mod webrtc_signaling;
 mod worker;
 mod worker_node;
@@ -84,6 +85,9 @@ pub fn start() {
     network_handle.listen(&NetworkView::new_png_part);
 
     let settings_handle = RenderSettingsView::init();
+    settings_handle
+        .activity()
+        .set_status(nuts::LifecycleStatus::Inactive);
 
     let _tabs_handle = Tabs::init(
         main_handle,
