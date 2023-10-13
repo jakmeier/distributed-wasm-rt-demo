@@ -44,7 +44,7 @@ impl Frame for RenderProgress {
             let (area, transform) = self.progress_bar_pos();
             let hitbox = area.transformed_bounding_box(transform);
             if event.pos().overlaps(&hitbox) {
-                paddle::send::<_, crate::Main>(crate::RequestNewRender);
+                paddle::share(crate::RequestNewRender);
             }
         }
         self.stop_button.pointer(event);
@@ -204,6 +204,7 @@ impl RenderProgress {
                 .to_std()
                 .unwrap();
             self.sub_text[0].update_text(&format!("Finished in {latency:#.1?}"));
+            paddle::share(crate::RenderFinished);
         }
         self.sub_text[1].update_text(&format!("Total compute: {:#.1?}", self.total_time));
     }

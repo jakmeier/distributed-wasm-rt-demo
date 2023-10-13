@@ -10,7 +10,8 @@ use paddle::quicksilver_compat::Color;
 use paddle::*;
 use palette::CSS_FONT_DARK;
 use progress::{ProgressMade, ProgressReset, RenderProgress};
-use render::{RenderSettings, RenderTask};
+use render::RenderTask;
+use render_settings::RenderSettingsView;
 use wasm_bindgen::prelude::wasm_bindgen;
 use workers_view::WorkerView;
 
@@ -22,6 +23,7 @@ mod palette;
 mod peer_proxy;
 mod progress;
 mod render;
+mod render_settings;
 mod webrtc_signaling;
 mod worker;
 mod worker_node;
@@ -33,6 +35,8 @@ const SCREEN_H: u32 = 2019;
 
 const SECONDARY_X: u32 = PADDING;
 const SECONDARY_Y: u32 = Main::HEIGHT + PADDING;
+const SECONDARY_W: u32 = SCREEN_W - 2 * PADDING;
+const SECONDARY_H: u32 = SCREEN_H - Main::HEIGHT - Tabs::HEIGHT - 2 * PADDING;
 
 const PADDING: u32 = 7;
 
@@ -53,7 +57,7 @@ pub fn start() {
 
     let state = Main::init(&images);
     let main_handle = paddle::register_frame(state, (), (0, 0));
-    main_handle.register_receiver(&Main::ping_next_job);
+    main_handle.register_receiver(&Main::enqueue_next_job);
     main_handle.listen(&Main::new_png_part);
     main_handle.listen(&Main::peer_message);
     main_handle.listen(&Main::stop);
@@ -78,11 +82,15 @@ pub fn start() {
 
     let network_handle = NetworkView::init();
     network_handle.listen(&NetworkView::new_png_part);
+
+    let settings_handle = RenderSettingsView::init();
+
     let _tabs_handle = Tabs::init(
         main_handle,
         progress_handle,
         worker_handle,
         network_handle,
+        settings_handle,
         &images,
     );
 
@@ -93,10 +101,8 @@ pub fn start() {
 }
 
 struct Main {
+    /// Shown before any images have been rendered.
     default_image: ImageDesc,
-
-    /// Image is rendered in increasing quality each time triggered.
-    next_quality: u32,
 
     /// Stack of all images rendered, drawn in the order they were added and
     /// potentially covering older images.
@@ -108,9 +114,15 @@ struct Main {
     old_images: usize,
 }
 
+/// UI requests a new render.
 struct RequestNewRender;
+/// UI input to stop the current render job.
 #[derive(Clone, Copy)]
 struct Stop;
+/// A new render job has been prepared, enqueue or deny it.
+struct EnqueueNewRender(Vec<RenderTask>);
+/// All tasks for a render job has finished.
+struct RenderFinished;
 
 impl paddle::Frame for Main {
     type State = ();
@@ -131,7 +143,7 @@ impl paddle::Frame for Main {
         if key.event_type() == KeyEventType::KeyPress {
             match key.key() {
                 Key::Space => {
-                    self.ping_next_job(_state, RequestNewRender);
+                    paddle::share(RequestNewRender);
                 }
                 _ => {}
             }
@@ -154,7 +166,6 @@ struct ImageData {
 impl Main {
     fn init(images: &Images) -> Self {
         Main {
-            next_quality: 0,
             imgs: vec![],
             old_images: 0,
             outstanding_jobs: 0,
@@ -162,38 +173,29 @@ impl Main {
         }
     }
 
-    /// Starts new job if the old is no longer running
+    /// Enqueues new jobs if the current jobs are done.
     ///
     /// paddle event listener
-    fn ping_next_job(&mut self, _: &mut (), _msg: RequestNewRender) {
+    fn enqueue_next_job(&mut self, _: &mut (), EnqueueNewRender(jobs): EnqueueNewRender) {
         if self.outstanding_jobs == 0 {
+            // update job queue
             if self.old_images > 0 {
                 self.imgs.drain(..self.old_images);
             }
-            let num_new_jobs = match self.next_quality {
-                0..=2 => 32,
-                3 => 128,
-                4 => 256,
-                5 => 512,
-                _ => 1024,
-            };
-
             self.old_images = self.imgs.len();
-            if let Some(job) = Self::new_full_screen_job(self.next_quality) {
-                let jobs = job.divide(num_new_jobs as u32);
-                self.outstanding_jobs = jobs.len();
-                paddle::send::<_, WorkerView>(jobs);
-                paddle::send::<_, RenderProgress>(ProgressReset {
-                    work_items: self.outstanding_jobs,
-                });
-                network::broadcast_async(
-                    p2p_proto::Message::RenderControl(RenderControlBody {
-                        num_new_jobs: self.outstanding_jobs as u32,
-                    }),
-                    None,
-                );
-                self.next_quality += 1;
-            }
+            self.outstanding_jobs = jobs.len();
+
+            // forward job to workers
+            paddle::send::<_, WorkerView>(jobs);
+            paddle::send::<_, RenderProgress>(ProgressReset {
+                work_items: self.outstanding_jobs,
+            });
+            network::broadcast_async(
+                p2p_proto::Message::RenderControl(RenderControlBody {
+                    num_new_jobs: self.outstanding_jobs as u32,
+                }),
+                None,
+            );
         } else {
             TextBoard::display_error_message("Rendering in progress.".to_owned()).unwrap();
         }
@@ -213,58 +215,7 @@ impl Main {
     pub fn stop(&mut self, _state: &mut (), _msg: &crate::Stop) {
         self.imgs.drain(self.old_images..);
         self.old_images = 0;
-        self.next_quality = self.next_quality.saturating_sub(1);
         self.outstanding_jobs = 0;
-    }
-
-    fn new_full_screen_job(quality: u32) -> Option<RenderTask> {
-        let mut resolution = 1.0;
-        let samples;
-        let recursion;
-        match quality {
-            0 => {
-                resolution = 0.25;
-                samples = 1;
-                recursion = 2;
-            }
-            1 => {
-                resolution = 0.5;
-                samples = 1;
-                recursion = 4;
-            }
-            2 => {
-                samples = 4;
-                recursion = 4;
-            }
-            3 => {
-                samples = 4;
-                recursion = 100;
-            }
-            4 => {
-                samples = 64;
-                recursion = 100;
-            }
-            5 => {
-                samples = 256;
-                recursion = 200;
-            }
-            6 => {
-                // very slightly better bright spot reflection
-                samples = 1024;
-                recursion = 512;
-            }
-            _more => return None,
-        }
-        let screen = Rectangle::new_sized((Main::WIDTH, Main::HEIGHT));
-        let settings = RenderSettings {
-            resolution: (
-                (resolution * screen.width()) as u32,
-                (resolution * screen.height()) as u32,
-            ),
-            samples,
-            recursion,
-        };
-        Some(RenderTask::new(screen, settings))
     }
 
     /// paddle event listener

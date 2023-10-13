@@ -26,6 +26,7 @@ impl Tabs {
         progress_handle: FrameHandle<crate::RenderProgress>,
         worker_handle: FrameHandle<crate::WorkerView>,
         network_handle: FrameHandle<crate::NetworkView>,
+        settings_handle: FrameHandle<crate::RenderSettingsView>,
         images: &Images,
     ) -> FrameHandle<Self> {
         let home_button = tab_button(images.home, 0);
@@ -54,7 +55,10 @@ impl Tabs {
                     main_handle.activity().into(),
                     network_handle.activity().into(),
                 ],
-                vec![main_handle.activity().into()],
+                vec![
+                    main_handle.activity().into(),
+                    settings_handle.activity().into(),
+                ],
                 vec![main_handle.activity().into()],
             ],
         };
