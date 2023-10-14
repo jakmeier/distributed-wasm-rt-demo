@@ -73,9 +73,8 @@ impl SignalingServerConnection {
             paddle::println!("Adding RtcPeerCandidate produced an error {err:?}.");
         });
 
-        // TODO: Don't use static local URL.
-        // TODO: Also, can we do it with wss?
-        let url = "ws://127.0.0.1:3000/ntmy";
+        // TODO: Don't use static URL, use env variable or something.
+        let url = "wss://demos.jakobmeier.ch/ntmy/ws";
 
         let onmessage = Rc::new(Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
             if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -178,6 +177,9 @@ impl SignalingServerConnection {
                 break;
             }
             paddle::println!("WS state changed to {state:?}");
+            if state == ReadyState::Closed {
+                return;
+            }
         }
 
         if let Err(err) = signaling.send(&bendy::serde::to_bytes(&msg).unwrap()) {
@@ -346,7 +348,6 @@ fn init_data_channel(
     mut on_msg: impl FnMut(&RtcDataChannel, MessageEvent) + 'static,
     mut on_open: impl FnMut(&RtcDataChannel) + 'static,
 ) {
-    data_channel.set_binary_type(web_sys::RtcDataChannelType::Blob);
     let data_channel_clone = data_channel.clone();
     let onmessage =
         Closure::<dyn FnMut(_)>::new(move |ev: MessageEvent| on_msg(&data_channel_clone, ev));

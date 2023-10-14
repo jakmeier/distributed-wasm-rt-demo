@@ -47,10 +47,16 @@ async fn main() {
     env_logger::init();
 
     let app = Router::new()
-        .route("/ntmy", get(handler))
+        .route("/ws", get(handler))
         .with_state(Arc::new(SessionBroker::default()));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 80));
+
+    println!("Starting signaling server");
+    info!("INFO is enabled");
+    debug!("DEBUG is enabled");
+    trace!("TRACE is enabled");
+
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await

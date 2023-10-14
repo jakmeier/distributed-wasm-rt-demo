@@ -24,7 +24,8 @@ impl WebSocketWrapper {
 
         // print error to console for ease of debugging
         let onerror = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
-            paddle::println!("SignalingServerConnection(error event): {:?}", e);
+            paddle::println!("SignalingServerConnection(error event): {e:?}");
+            web_sys::console::log_1(&e);
         });
         ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
 
