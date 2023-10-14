@@ -152,6 +152,67 @@ impl Message {
         }
     }
 
+    pub(crate) fn from_array(buffer: ArrayBuffer) -> Result<Self, wasm_bindgen::JsValue> {
+        let uint8_array = js_sys::Uint8Array::new_with_byte_offset_and_length(&buffer, 0, 1);
+        let first_byte = uint8_array.get_index(0);
+        let header: Option<MessageHeader> = first_byte.try_into().ok();
+        match header {
+            Some(MessageHeader::RenderedPart) => {
+                let fields_len = 5 * std::mem::size_of::<u32>();
+                let fields_array = js_sys::Uint8Array::new_with_byte_offset_and_length(
+                    &buffer,
+                    1,
+                    fields_len as u32,
+                );
+                let fields_bytes = fields_array.to_vec();
+                let body = RenderedPartBody::deserialize(&fields_bytes);
+
+                let png_array =
+                    js_sys::Uint8Array::new_with_byte_offset(&buffer, 1 + fields_len as u32);
+                let args = js_sys::Array::new();
+                args.push(&png_array);
+                let png_blob = Blob::new_with_buffer_source_sequence(&args).unwrap();
+
+                // TODO: unregister object?
+                let url = web_sys::Url::create_object_url_with_blob(&png_blob)?;
+                let png = PngPart {
+                    img: ImageData::new_leaky(url),
+                    screen_area: Rectangle::new(
+                        (body.x, body.y),
+                        (body.pixel_width, body.pixel_height),
+                    ),
+                };
+                Ok(Message::RenderedPart(png))
+            }
+            Some(MessageHeader::StealWork) => {
+                let fields_len = std::mem::size_of::<u32>();
+                let fields_array = js_sys::Uint8Array::new_with_byte_offset_and_length(
+                    &buffer,
+                    1,
+                    fields_len as u32,
+                );
+                let body = StealWorkBody::deserialize(&fields_array.to_vec());
+                Ok(Message::StealWork(body))
+            }
+            Some(MessageHeader::Job) => {
+                let fields_array = js_sys::Uint8Array::new_with_byte_offset(&buffer, 1);
+                let body = JobBody::deserialize(&fields_array.to_vec());
+                Ok(Message::Job(body))
+            }
+            Some(MessageHeader::RenderControl) => {
+                let fields_array = js_sys::Uint8Array::new_with_byte_offset(&buffer, 1);
+                let body = RenderControlBody::deserialize(&fields_array.to_vec());
+                Ok(Message::RenderControl(body))
+            }
+            None => Err(format!(
+                "Unexpected message, starting with byte {} and a total length of {}.",
+                first_byte,
+                buffer.byte_length()
+            )
+            .into()),
+        }
+    }
+
     fn header(&self) -> MessageHeader {
         match self {
             Message::RenderedPart(_) => MessageHeader::RenderedPart,

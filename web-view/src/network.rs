@@ -205,7 +205,10 @@ fn on_message(_data_channel: &RtcDataChannel, id: &str, ev: MessageEvent) {
     if let Some(message) = ev.data().as_string() {
         // strings can be used for debugging
         paddle::println!("onmessage({id}): {:?}", message);
-    } else if let Some(blob) = ev.data().dyn_into::<web_sys::Blob>().ok() {
+    }
+    // Handling Blobs directly is most efficient and works in FF. In fact, it's
+    // the default in FF.
+    else if let Some(blob) = ev.data().dyn_into::<web_sys::Blob>().ok() {
         let future = async {
             match crate::p2p_proto::Message::from_blob(blob).await {
                 Ok(msg) => paddle::share(msg),
@@ -213,6 +216,16 @@ fn on_message(_data_channel: &RtcDataChannel, id: &str, ev: MessageEvent) {
             }
         };
         wasm_bindgen_futures::spawn_local(future);
+    }
+    // Chrome hasn't implemented blobs on RTC data channels, so we have to use
+    // ArrayBuffer instead. FF also implements that, so I should probably just
+    // set the channel binaryType to ArrayBuffer and always use that. But I
+    // started with FF, so I'll stubbornly keep both implementations.
+    else if let Some(array_buffer) = ev.data().dyn_into::<js_sys::ArrayBuffer>().ok() {
+        match crate::p2p_proto::Message::from_array(array_buffer) {
+            Ok(msg) => paddle::share(msg),
+            Err(e) => paddle::println!("failed to parse received message: {e:?}"),
+        }
     } else {
         paddle::println!(
             "unexpected message type received: {}",

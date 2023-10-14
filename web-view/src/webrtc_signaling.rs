@@ -128,7 +128,6 @@ impl SignalingServerConnection {
         let on_data_channel = Closure::<dyn FnMut(_)>::new(move |ev: RtcDataChannelEvent| {
             let id3 = id2.clone();
             let id4 = id2.clone();
-            paddle::println!("data channel opened by remote");
             init_data_channel(
                 ev.channel(),
                 move |c, msg| on_msg(c, &id3, msg),
