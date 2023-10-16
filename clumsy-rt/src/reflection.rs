@@ -7,6 +7,7 @@ pub enum ReflectionType {
     Lambert,
     Metal,
     Absorb,
+    LightSource,
 }
 
 pub fn mirror_reflection(

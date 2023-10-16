@@ -47,6 +47,9 @@ impl Texture {
     pub fn metal(color: Vector3<f32>, color_strength: f32, reflect: f32) -> Self {
         Self::new(color, ReflectionType::Metal, color_strength, reflect)
     }
+    pub fn light_source(color: Vector3<f32>) -> Self {
+        Self::new(color, ReflectionType::LightSource, 1.0, 0.0)
+    }
     pub fn color(&self) -> Vector3<f32> {
         self.color
     }

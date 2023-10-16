@@ -185,15 +185,15 @@ impl RenderSettings {
             }
             2 => {
                 samples = 4;
-                recursion = 2;
+                recursion = 3;
             }
             3 => {
                 samples = 8;
-                recursion = 3;
+                recursion = 4;
             }
             4 => {
                 samples = 16;
-                recursion = 4;
+                recursion = 6;
             }
             5 => {
                 samples = 32;

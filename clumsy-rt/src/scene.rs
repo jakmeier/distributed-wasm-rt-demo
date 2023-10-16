@@ -101,6 +101,7 @@ impl Scene {
                     self.cast_ray(&new_ray, depth - 1)
                 }
                 ReflectionType::Absorb => Vector3::new(0.0, 0.0, 0.0),
+                ReflectionType::LightSource => texture.color(),
             };
             return texture.color_strength() * texture.color() * light_in.norm()
                 + texture.reflective_strength() * light_in;

@@ -16,11 +16,11 @@ pub fn build_cool_scene() -> Scene {
     // big sphere
     let tran = Translation3::new(0.0, VIEWPORT_WIDTH * -100.5 - 2.5, -5.0 * VIEWPORT_WIDTH);
     let big_sphere_radius = VIEWPORT_WIDTH * 100.0;
-    let floor_col = Vector3::new(0.05, 0.8, 0.075);
+    let floor_col = Vector3::new(0.025, 0.4, 0.0325) / 1.5;
     scene.add(
         Ball::new(big_sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::diffuse(floor_col, 0.5).with_fuzz(0.125),
+        Texture::diffuse(floor_col, 0.75).with_fuzz(0.125),
     );
 
     // center sphere
@@ -28,22 +28,21 @@ pub fn build_cool_scene() -> Scene {
     let center_h = 0.5;
     let y = center_h + 1.75 * center_sphere_radius;
     let tran = Translation3::new(0.0, y, -5.0 * VIEWPORT_WIDTH);
-    let blue = Vector3::new(0.0, 0.0, 0.5);
     scene.add(
         Ball::new(center_sphere_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::metal(blue, 0.6, 0.2).with_fuzz(0.125),
+        Texture::dark_mirror(0.1),
     );
 
-    // moon (sun)
+    // moon
     let moon_d = VIEWPORT_WIDTH * 500.0;
-    let tran = Translation3::new(moon_d, moon_d, -2.0 * moon_d);
+    let tran = Translation3::new(-1.5 * moon_d, 1.5 * moon_d, -2.0 * moon_d);
     let moon_radius = VIEWPORT_WIDTH * 100.0;
-    let moon_col = Vector3::new(10.0, 10.0, 0.5);
+    let moon_col = Vector3::new(1.0, 1.0, 0.1);
     scene.add(
         Ball::new(moon_radius),
         Isometry3::from_parts(tran, rot),
-        Texture::perfect_diffuse(moon_col),
+        Texture::light_source(moon_col),
     );
 
     // die
@@ -51,13 +50,14 @@ pub fn build_cool_scene() -> Scene {
     let die_rot = UnitQuaternion::from_scaled_axis(Vector3::x() * FRAC_PI_4)
         * UnitQuaternion::from_scaled_axis(Vector3::z() * FRAC_PI_4)
         * UnitQuaternion::from_scaled_axis(Vector3::y() * FRAC_PI_2);
-    let red = Vector3::new(0.85, 0.0, 0.0);
+    let red = Vector3::new(0.839, 0.25, 0.27);
     let side_len = center_sphere_radius * 0.3819;
     let die = Cuboid::new(Vector3::new(side_len, side_len, side_len));
     scene.add(
         die,
         Isometry3::from_parts(tran, die_rot),
-        Texture::metal(red, 0.65, 0.25),
+        // Texture::metal(red, 0.55, 0.25),
+        Texture::metal(red, 0.95, 0.25),
     );
 
     let smaller = VIEWPORT_WIDTH / 4.0;
@@ -72,7 +72,7 @@ pub fn build_cool_scene() -> Scene {
             scene.add(
                 Ball::new(smaller),
                 Isometry3::from_parts(tran, rot),
-                Texture::dark_mirror(0.5),
+                Texture::metal(Vector3::new(0.313, 0.196, 0.078), 1.0, 0.1).with_fuzz(0.05),
             );
         }
     }
@@ -110,15 +110,26 @@ pub fn build_simple_scene() -> Scene {
 }
 
 fn sky(ray: &Ray<f32>) -> Vector3<f32> {
-    // todo: use sun as main source of light
     let direction: Vector3<f32> = ray.dir.into();
     let unit_direction = direction.normalize();
-    let dark = Vector3::new(-0.3, -0.3, 0.3);
-    let light = Vector3::new(0.5, 0.5, 1.55);
+
+    let sun_pos = Vector3::new(0.5, -0.15, -1.0);
+    let sun_distance = (unit_direction - sun_pos.normalize()).norm_squared();
+    let sun_col = Vector3::new(1.5, 0.273, 0.0);
+    if sun_distance < 0.02 {
+        return sun_col;
+    }
+
+    // background gradient
+    let horizon_col = Vector3::new(0.5, 0.1, 0.05);
+    let sky_col = Vector3::new(0.5, 0.5, 1.75);
     let t = 0.35 - unit_direction.y;
     let t = t.max(0.0).min(1.0);
-    let col = 0.5 * (1.0 - t) * light + t * dark;
-    col
+
+    // additive extra light around sun, exponentially decays with distance
+    let sun_light = 0.9f32.powf(sun_distance * 100.0) * sun_col;
+
+    0.5 * (1.0 - t) * sky_col + t * horizon_col + sun_light
 }
 
 fn simple_background(ray: &Ray<f32>) -> Vector3<f32> {
