@@ -197,7 +197,7 @@ impl PngRenderWorker {
                 * Transform::rotate(timestamp / 10.0)
                 * Transform::translate(-area.center());
             canvas.draw_ex(&area.shrink_to_center(0.8), &self.loading_img, trans, 1);
-        } else {
+        } else if self.ready() {
             canvas.draw_ex(
                 &area.shrink_to_center(0.8),
                 &self.ready_img,
