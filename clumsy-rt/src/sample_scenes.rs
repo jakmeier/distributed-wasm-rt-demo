@@ -121,13 +121,13 @@ fn sky(ray: &Ray<f32>) -> Vector3<f32> {
     }
 
     // background gradient
-    let horizon_col = Vector3::new(0.5, 0.1, 0.05);
-    let sky_col = Vector3::new(0.5, 0.5, 1.75);
+    let horizon_col = Vector3::new(0.5, 0.2, 0.0);
+    let sky_col = Vector3::new(0.25, 0.25, 1.5);
     let t = 0.35 - unit_direction.y;
     let t = t.max(0.0).min(1.0);
 
     // additive extra light around sun, exponentially decays with distance
-    let sun_light = 0.9f32.powf(sun_distance * 100.0) * sun_col;
+    let sun_light = 0.9f32.powf(sun_distance * 300.0) * sun_col;
 
     0.5 * (1.0 - t) * sky_col + t * horizon_col + sun_light
 }
