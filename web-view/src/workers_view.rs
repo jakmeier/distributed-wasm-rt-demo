@@ -282,6 +282,7 @@ impl WorkerView {
                 self.job_pool.extend_from_slice(&msg.jobs);
             }
             p2p_proto::Message::RenderedPart(_) => (),
+            p2p_proto::Message::UiUpdate(_) => (),
             p2p_proto::Message::RenderControl(body) => {
                 if body.num_new_jobs == 0 {
                     self.stop_local();

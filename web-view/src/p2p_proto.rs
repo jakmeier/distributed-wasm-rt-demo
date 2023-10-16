@@ -30,6 +30,7 @@ pub(crate) enum Message {
     StealWork(StealWorkBody),
     Job(JobBody),
     RenderControl(RenderControlBody),
+    UiUpdate(UiUpdateBody),
 }
 /// Message header sent between peers over WebRTC data channels.
 ///
@@ -47,6 +48,8 @@ enum MessageHeader {
     Job = 3,
     /// Start or stop rendering.
     RenderControl = 4,
+    /// Update config options in the UI
+    UiUpdate = 5,
 }
 
 struct RenderedPartBody {
@@ -67,6 +70,11 @@ pub(crate) struct JobBody {
 
 pub(crate) struct RenderControlBody {
     pub num_new_jobs: u32,
+}
+
+pub(crate) struct UiUpdateBody {
+    pub recursion: u32,
+    pub samples: u32,
 }
 
 impl Message {
@@ -100,6 +108,7 @@ impl Message {
             Message::StealWork(body) => body.serialize(w)?,
             Message::Job(body) => body.serialize(w)?,
             Message::RenderControl(body) => body.serialize(w)?,
+            Message::UiUpdate(body) => body.serialize(w)?,
         }
         Ok(())
     }
@@ -142,6 +151,12 @@ impl Message {
                 let body_bytes = blob_to_array(&body_blob).await?;
                 let body = RenderControlBody::deserialize(&body_bytes.to_vec());
                 Ok(Message::RenderControl(body))
+            }
+            Some(MessageHeader::UiUpdate) => {
+                let body_blob = blob.slice_with_i32(1)?;
+                let body_bytes = blob_to_array(&body_blob).await?;
+                let body = UiUpdateBody::deserialize(&body_bytes.to_vec());
+                Ok(Message::UiUpdate(body))
             }
             None => Err(format!(
                 "Unexpected message, starting with byte {} and a total length of {}.",
@@ -204,6 +219,11 @@ impl Message {
                 let body = RenderControlBody::deserialize(&fields_array.to_vec());
                 Ok(Message::RenderControl(body))
             }
+            Some(MessageHeader::UiUpdate) => {
+                let fields_array = js_sys::Uint8Array::new_with_byte_offset(&buffer, 1);
+                let body = UiUpdateBody::deserialize(&fields_array.to_vec());
+                Ok(Message::UiUpdate(body))
+            }
             None => Err(format!(
                 "Unexpected message, starting with byte {} and a total length of {}.",
                 first_byte,
@@ -219,6 +239,7 @@ impl Message {
             Message::StealWork(_) => MessageHeader::StealWork,
             Message::Job(_) => MessageHeader::Job,
             Message::RenderControl(_) => MessageHeader::RenderControl,
+            Message::UiUpdate(_) => MessageHeader::UiUpdate,
         }
     }
 }
@@ -248,6 +269,7 @@ impl TryFrom<u8> for MessageHeader {
             2 => Self::StealWork,
             3 => Self::Job,
             4 => Self::RenderControl,
+            5 => Self::UiUpdate,
             _ => return Err(()),
         };
         assert_eq!(result as u8, value);
@@ -341,5 +363,23 @@ impl RenderControlBody {
         );
         let num_new_jobs = u32::from_be_bytes(data[0..4].try_into().unwrap());
         Self { num_new_jobs }
+    }
+}
+
+impl UiUpdateBody {
+    fn serialize(&self, w: &mut impl Write) -> Result<(), std::io::Error> {
+        w.write(&self.recursion.to_be_bytes())?;
+        w.write(&self.samples.to_be_bytes())?;
+        Ok(())
+    }
+
+    fn deserialize(data: &[u8]) -> Self {
+        assert!(data.len() == 8, "UiUpdateBody must be 8 bytes");
+        let mut numbers = data
+            .chunks_exact(4)
+            .map(|slice| u32::from_be_bytes(slice.try_into().expect("window size must be exact")));
+        let recursion = numbers.next().expect("not enough numbers");
+        let samples = numbers.next().expect("not enough numbers");
+        Self { recursion, samples }
     }
 }

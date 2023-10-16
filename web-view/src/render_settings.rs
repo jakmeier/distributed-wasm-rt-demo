@@ -2,11 +2,12 @@ use std::iter;
 
 use paddle::{Frame, FrameHandle, Rectangle};
 
+use crate::p2p_proto::UiUpdateBody;
 use crate::render::{RenderSettings, RenderTask};
 use crate::ui_slider::Slider;
 use crate::{
-    palette, EnqueueNewRender, Main, RequestNewRender, PADDING, SECONDARY_H, SECONDARY_W,
-    SECONDARY_X, SECONDARY_Y,
+    network, p2p_proto, palette, EnqueueNewRender, Main, RequestNewRender, PADDING, SECONDARY_H,
+    SECONDARY_W, SECONDARY_X, SECONDARY_Y,
 };
 
 pub(crate) struct RenderSettingsView {
@@ -37,6 +38,7 @@ impl Frame for RenderSettingsView {
         adjusted |= self.samples.adjust(event);
         if adjusted {
             self.preset_level = None;
+            self.sync_settings_to_peers();
         }
     }
 
@@ -90,6 +92,7 @@ impl RenderSettingsView {
         let handle = paddle::register_frame_no_state(this, (SECONDARY_X, SECONDARY_Y));
         handle.listen(Self::ping_next_job);
         handle.listen(Self::render_done);
+        handle.listen(Self::peer_message);
         handle
     }
 
@@ -111,6 +114,18 @@ impl RenderSettingsView {
             let new = RenderSettings::preset(*level);
             self.samples.set_value(&new.0);
             self.recursion.set_value(&new.1);
+            self.sync_settings_to_peers();
+        }
+    }
+
+    /// paddle event listener
+    fn peer_message(&mut self, _state: &mut (), msg: &p2p_proto::Message) {
+        match msg {
+            p2p_proto::Message::UiUpdate(settings) => {
+                self.recursion.set_value(&settings.recursion);
+                self.samples.set_value(&settings.samples);
+            }
+            _ => (),
         }
     }
 
@@ -132,6 +147,14 @@ impl RenderSettingsView {
             samples,
             recursion: *self.recursion.value(),
         }
+    }
+
+    fn sync_settings_to_peers(&self) {
+        let body = UiUpdateBody {
+            recursion: *self.recursion.value(),
+            samples: *self.samples.value(),
+        };
+        network::broadcast_async(p2p_proto::Message::UiUpdate(body), None);
     }
 }
 
