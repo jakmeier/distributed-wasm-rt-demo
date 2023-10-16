@@ -1,6 +1,6 @@
 use js_sys::Uint32Array;
 use paddle::quicksilver_compat::{Color, Shape};
-use paddle::{FloatingText, ImageDesc, Rectangle, Transform};
+use paddle::{FloatingText, ImageDesc, Rectangle, TextBoard, Transform};
 use std::cell::RefCell;
 use wasm_bindgen::prelude::Closure;
 use wasm_bindgen::JsCast;
@@ -79,7 +79,29 @@ impl TaskRenderer for RemoteWorkerContext {
 
 impl RemoteWorkerContext {
     pub(crate) fn new(url: String, worker_id: usize) -> Self {
-        paddle::send::<_, WorkerView>(WorkerReady(worker_id));
+        // construct this outside to make future independent of `url` lifetime
+        let ping_url = format!("{url}/ping");
+        let future = async move {
+            match paddle::fetch::load_file(&ping_url).await {
+                Ok(s) if s == b"pong" => paddle::send::<_, WorkerView>(WorkerReady(worker_id)),
+                Ok(s) => {
+                    TextBoard::display_error_message("Unexpected remote worker response.".into())
+                        .unwrap();
+                    if let Ok(msg) = std::str::from_utf8(&s) {
+                        let error_msg = format!("Message was: {msg}.");
+                        paddle::println!("{}", error_msg);
+                        TextBoard::display_error_message(error_msg).unwrap();
+                    }
+                }
+                Err(_) => {
+                    TextBoard::display_error_message(format!(
+                        "Connecting worker {worker_id} failed."
+                    ))
+                    .unwrap();
+                }
+            }
+        };
+        wasm_bindgen_futures::spawn_local(future);
         Self { url, worker_id }
     }
 }

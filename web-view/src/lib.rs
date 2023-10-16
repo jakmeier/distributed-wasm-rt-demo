@@ -48,7 +48,7 @@ pub fn start() {
         .with_canvas_id("paddle-canvas-id")
         .with_resolution((SCREEN_W, SCREEN_H))
         .with_background_color(palette::MAIN)
-        .with_text_board(Rectangle::new((100, 100), (500, 1000)))
+        .with_text_board(Rectangle::new((100, 100), (1000, 500)))
         .with_texture_config(TextureConfig::default().without_filter());
 
     // Initialize framework state and connect to browser window
