@@ -208,7 +208,7 @@ impl WorkerView {
                 }
                 self.workers.push(PngRenderWorker::new(
                     self.workers.len(),
-                    Some("http://jakmeier-clumsy-rt-demo.fermyon.app".to_owned()),
+                    Some("https://jakmeier-clumsy-rt-demo.fermyon.app".to_owned()),
                     Box::new(FERMYON_WORKER_COLOR),
                     self.loading_img,
                     self.fermyon_img,
